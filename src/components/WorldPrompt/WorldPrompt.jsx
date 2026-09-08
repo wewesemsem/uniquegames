@@ -14,6 +14,7 @@ export function WorldPrompt() {
   const busy = BUSY.has(world.status)
   const waitSeconds = world.retryUntil ? Math.max(0, Math.ceil((world.retryUntil - nowTick) / 1000)) : 0
   const waiting = waitSeconds > 0
+  const canSubmit = Boolean(text.trim()) && !busy && !waiting
 
   const voice = useMemo(
     () =>
@@ -45,18 +46,23 @@ export function WorldPrompt() {
     return () => window.clearInterval(id)
   }, [world.retryUntil])
 
-  function submit(event) {
-    event?.preventDefault()
+  function submit(environmentMode = 'PROCEDURAL_360') {
     const prompt = text.trim()
     if (!prompt || busy || waiting) {
       return
     }
-    worldStore.requestWorld(prompt)
+    worldStore.requestWorld(prompt, { environmentMode })
   }
 
   return (
     <section className="world-prompt" aria-label="World director">
-      <form className="world-prompt-card" onSubmit={submit}>
+      <form
+        className="world-prompt-card"
+        onSubmit={(event) => {
+          event.preventDefault()
+          submit('PROCEDURAL_360')
+        }}
+      >
         <p className="kicker">World director</p>
         <h2>What do you want to explore?</h2>
         <label className="sr-only" htmlFor="world-prompt-input">
@@ -69,10 +75,10 @@ export function WorldPrompt() {
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault()
-              submit(event)
+              submit('PROCEDURAL_360')
             }
           }}
-          placeholder='I want to explore space.'
+          placeholder="I want to explore space."
           rows={2}
           disabled={busy}
         />
@@ -80,21 +86,49 @@ export function WorldPrompt() {
           {speechAvailable ? (
             <button
               type="button"
-              className={listening ? 'ghost-button is-listening' : 'ghost-button'}
+              className={listening ? 'ghost-button mic-button is-listening' : 'ghost-button mic-button'}
               onClick={() => (listening ? voice.stop() : voice.start())}
               disabled={busy || waiting}
               aria-pressed={listening}
               aria-label={listening ? 'Stop listening' : 'Speak a world request'}
             >
-              {listening ? 'Listening…' : '🎤'}
+              {listening ? (
+                'Listening…'
+              ) : (
+                <svg className="mic-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path
+                    fill="currentColor"
+                    d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"
+                  />
+                </svg>
+              )}
             </button>
           ) : (
             <span className="world-prompt-mic-missing">Voice unavailable</span>
           )}
-          <button type="submit" className="vr-button" disabled={busy || waiting || !text.trim()}>
-            {waiting ? `Wait ${waitSeconds}s` : busy ? 'Working…' : 'Explore'}
-          </button>
+          <div className="world-prompt-submit-group">
+            <button type="submit" className="vr-button" data-tutorial="explore" disabled={!canSubmit}>
+              {waiting ? `Wait ${waitSeconds}s` : busy ? 'Working…' : 'Explore'}
+            </button>
+            <button
+              type="button"
+              className="image-button"
+              data-tutorial="ai-images"
+              disabled={!canSubmit}
+              title="Uses gpt-image-1 high-quality 360° panoramas. Usually 1–2 minutes."
+              onClick={() => submit('IMAGE_GENERATION')}
+            >
+              {busy && world.models?.environmentMode === 'IMAGE_GENERATION'
+                ? 'Painting…'
+                : waiting
+                  ? `Wait ${waitSeconds}s`
+                  : 'AI images'}
+            </button>
+          </div>
         </div>
+        <p className="world-prompt-image-warn">
+          AI images use the original high-quality panorama model and usually take 1–2 minutes.
+        </p>
         {busy ? (
           <p className="status-loading" aria-live="polite">
             {world.message || 'Building your world...'}
@@ -120,7 +154,13 @@ export function WorldPrompt() {
           </p>
         ) : null}
         {world.models?.environmentMode === 'PROCEDURAL_360' && world.status === 'ready' && world.director !== 'llm' ? (
-          <p className="hint">Procedural 360° mode (ENVIRONMENT_MODE=PROCEDURAL_360).</p>
+          <p className="hint">Procedural 360° mode.</p>
+        ) : null}
+        {world.models?.environmentMode === 'IMAGE_GENERATION' && world.status === 'ready' ? (
+          <p className="hint">
+            High-quality image panoramas
+            {world.models?.image ? ` (${world.models.image})` : ''}.
+          </p>
         ) : null}
         {world.director === 'heuristic' && world.status === 'ready' ? (
           <p className="hint">

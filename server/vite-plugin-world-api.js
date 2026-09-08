@@ -8,6 +8,7 @@ function isWorldGenerate(req) {
 }
 
 export function worldApiPlugin(env) {
+  // Build once at plugin init. Restart `npm run dev` after changing server/*.js.
   const handle = createWorldGenerationHandler(env)
   const generatedRoot = join(process.cwd(), env.GENERATED_ASSET_DIR || 'public/generated')
   const serveGenerated = createGeneratedAssetsMiddleware(generatedRoot)

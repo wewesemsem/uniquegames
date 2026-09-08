@@ -119,6 +119,7 @@
 
 .vr-button,
 .ghost-button,
+.image-button,
 .env-nav-item {
   pointer-events: auto;
   cursor: pointer;
@@ -136,6 +137,16 @@
 
 .vr-button:hover {
   background: #d8f59a;
+}
+
+.image-button {
+  color: #f4f6fb;
+  background: rgba(120, 168, 255, 0.28);
+  border: 1px solid rgba(160, 196, 255, 0.35);
+}
+
+.image-button:hover {
+  background: rgba(140, 184, 255, 0.4);
 }
 
 .ghost-button {
@@ -186,7 +197,7 @@
   left: 50%;
   bottom: 20px;
   transform: translateX(-50%);
-  width: min(440px, calc(100vw - 24px));
+  width: min(520px, calc(100vw - 24px));
   pointer-events: none;
 }
 
@@ -233,12 +244,41 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
+}
+
+.world-prompt-submit-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.world-prompt-image-warn {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: rgba(190, 210, 255, 0.72);
 }
 
 .world-prompt-mic-missing {
   font-size: 0.75rem;
   color: rgba(244, 246, 251, 0.55);
+}
+
+.mic-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.mic-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
 .ghost-button.is-listening {
@@ -247,6 +287,7 @@
 }
 
 .vr-button:disabled,
+.image-button:disabled,
 .ghost-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -381,4 +422,111 @@
   to {
     opacity: 1;
   }
+}
+
+/* —— First-run tutorial —— */
+.tutorial-root {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: auto;
+}
+
+.tutorial-scrim {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+}
+
+.tutorial-highlight {
+  position: absolute;
+  border-radius: 12px;
+  border: 2px solid rgba(201, 240, 125, 0.95);
+  box-shadow:
+    0 0 0 9999px rgba(6, 8, 14, 0.42),
+    0 0 24px rgba(201, 240, 125, 0.35);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.tutorial-tip {
+  position: absolute;
+  z-index: 2;
+  padding: 12px 14px 12px;
+  border-radius: 12px;
+  background: rgba(14, 16, 24, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  color: #f4f6fb;
+  --arrow-x: 50%;
+}
+
+.tutorial-tip h3 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.tutorial-tip p {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: rgba(244, 246, 251, 0.82);
+}
+
+.tutorial-step {
+  margin: 0 0 4px !important;
+  font-size: 0.7rem !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(201, 240, 125, 0.85) !important;
+}
+
+.tutorial-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.tutorial-arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  left: var(--arrow-x);
+  transform: translateX(-50%);
+}
+
+.tutorial-arrow-down {
+  bottom: -10px;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 10px solid rgba(14, 16, 24, 0.94);
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.12));
+}
+
+.tutorial-arrow-up {
+  top: -10px;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 10px solid rgba(14, 16, 24, 0.94);
+  filter: drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.12));
+}
+
+.tutorial-arrow-down::after,
+.tutorial-arrow-up::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 12px;
+  background: rgba(201, 240, 125, 0.9);
+}
+
+.tutorial-arrow-down::after {
+  top: 10px;
+}
+
+.tutorial-arrow-up::after {
+  bottom: 10px;
 }

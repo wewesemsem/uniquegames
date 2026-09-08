@@ -95,8 +95,8 @@ export function SceneInteractionSystem({ roomId, interactions, objects = [], pla
 
   const interactionKey = useMemo(() => {
     const events = interactions?.events ?? []
-    return events.map((e) => e.id).join('|')
-  }, [interactions])
+    return `${roomId}|${events.map((e) => e.id).join('|')}|${objects.map((o) => o.id).join(',')}`
+  }, [roomId, interactions, objects])
 
   useEffect(() => {
     const token = ++bootToken.current
@@ -107,8 +107,7 @@ export function SceneInteractionSystem({ roomId, interactions, objects = [], pla
       sceneEventStore.startTimedEvents()
     }, 50)
     return () => clearTimeout(t)
-    // objects are read via ref; re-bind when room or interaction set changes
-  }, [roomId, interactionKey, interactions])
+  }, [interactionKey, roomId, interactions])
 
   useFrame((_, delta) => {
     const liveObjects = objectsRef.current

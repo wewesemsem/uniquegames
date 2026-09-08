@@ -31,6 +31,13 @@ const WAIT_BEATS = [
   'Still working — this can take a minute...',
 ]
 
+const IMAGE_WAIT_BEATS = [
+  'Painting high-quality 360° skies...',
+  'This usually takes 1–2 minutes...',
+  'Still rendering panoramas — hang tight...',
+  'Almost there — HQ images take a bit...',
+]
+
 const MORE_BEATS = [
   "You're in. Give us a moment — more rooms are still painting.",
   'Almost done...',
@@ -50,17 +57,29 @@ function shortFailureHint(reason) {
 
 function readyMessage(rooms, generation, environmentMode) {
   const proceduralCount = rooms.filter((room) => room.procedural).length
+  const generatedCount = rooms.filter(
+    (room) => room.panorama?.source === 'generated' || room.panorama?.source === 'generated-cache'
+  ).length
+  const panoramaFallbacks = rooms.filter((room) => room.panorama?.source === 'fallback').length
+  const failureHint = shortFailureHint(generation?.reasons?.[0])
+
+  if (environmentMode === 'IMAGE_GENERATION' || generatedCount > 0) {
+    if (generatedCount) {
+      return `World ready. Loaded ${generatedCount} generated 360° environment${generatedCount === 1 ? '' : 's'}.`
+    }
+    if (panoramaFallbacks || generation?.missing) {
+      return failureHint
+        ? `World ready, but panorama generation failed (${failureHint}). Using placeholder skies.`
+        : 'World ready, but panorama generation failed. Using placeholder skies.'
+    }
+  }
+
   if (environmentMode === 'PROCEDURAL_360' || proceduralCount > 0) {
     return `World ready. Procedural 360° environment (${proceduralCount || rooms.length} room${
       (proceduralCount || rooms.length) === 1 ? '' : 's'
     }).`
   }
 
-  const generatedCount = rooms.filter(
-    (room) => room.panorama?.source === 'generated' || room.panorama?.source === 'generated-cache'
-  ).length
-  const panoramaFallbacks = rooms.filter((room) => room.panorama?.source === 'fallback').length
-  const failureHint = shortFailureHint(generation?.reasons?.[0])
   if (generatedCount) {
     return `World ready. Loaded ${generatedCount} generated 360° environment${generatedCount === 1 ? '' : 's'}.`
   }
@@ -135,8 +154,10 @@ function createWorldStore() {
     environmentStore.replaceWorld(environments, built.startId)
   }
 
-  async function requestWorld(prompt) {
+  async function requestWorld(prompt, options = {}) {
     const text = String(prompt ?? '').trim()
+    const environmentMode = options.environmentMode || 'PROCEDURAL_360'
+    const usingImages = environmentMode === 'IMAGE_GENERATION'
     if (!text) {
       emit({ status: 'error', error: 'Describe a world to explore.', message: '', retryAfter: null, retryUntil: null })
       return
@@ -152,17 +173,19 @@ function createWorldStore() {
     const signal = abortController.signal
     const token = ++requestToken
     stopBeats()
+    const beats = usingImages ? IMAGE_WAIT_BEATS : WAIT_BEATS
     emit({
       prompt: text,
       status: 'submitting',
-      message: WAIT_BEATS[0],
+      message: beats[0],
       error: null,
       notice: null,
       generationRequests: [],
       retryAfter: null,
       retryUntil: null,
+      models: { ...(snapshot.models ?? {}), environmentMode },
     })
-    startBeats(WAIT_BEATS)
+    startBeats(beats)
 
     let specification = null
     const rooms = []
@@ -171,6 +194,7 @@ function createWorldStore() {
     try {
       const directed = await directWorld(text, {
         signal,
+        environmentMode,
         onEvent(event) {
           if (token !== requestToken) {
             return

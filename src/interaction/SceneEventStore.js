@@ -31,17 +31,10 @@ export function createSceneEventStore() {
   let gazeProgress = new Map()
   let proximityLatched = new Set()
   let timersStarted = new Set()
+  // useSyncExternalStore requires a stable snapshot reference until the store changes.
+  let snapshot = buildSnapshot()
 
-  function emit() {
-    for (const listener of listeners) listener()
-  }
-
-  function subscribe(listener) {
-    listeners.add(listener)
-    return () => listeners.delete(listener)
-  }
-
-  function getSnapshot() {
+  function buildSnapshot() {
     return {
       roomId,
       spawns: spawns.slice(),
@@ -57,6 +50,20 @@ export function createSceneEventStore() {
         triggerCount: e.triggerCount,
       })),
     }
+  }
+
+  function emit() {
+    snapshot = buildSnapshot()
+    for (const listener of listeners) listener()
+  }
+
+  function subscribe(listener) {
+    listeners.add(listener)
+    return () => listeners.delete(listener)
+  }
+
+  function getSnapshot() {
+    return snapshot
   }
 
   function resetRoom(nextRoomId, interactions, objects = []) {
@@ -88,11 +95,22 @@ export function createSceneEventStore() {
     }
 
     for (const object of objects) {
-      const matched = (object.interactions ?? []).map((e) => e.id).filter((id) => events.has(id))
+      // Prefer per-object bindings; also re-match from room events if missing.
+      let matched = (object.interactions ?? []).map((e) => e.id).filter((eid) => events.has(eid))
+      if (!matched.length && list.length) {
+        matched = list
+          .filter((spec) => {
+            const t = String(spec.target).toLowerCase()
+            const type = String(object.type || '').toLowerCase()
+            const tags = (object.tags || []).map((x) => String(x).toLowerCase())
+            return t === type || tags.includes(t) || String(object.id || '').toLowerCase().includes(t)
+          })
+          .map((spec) => spec.id)
+      }
       if (matched.length) {
         objectIndex.set(object.id, matched)
-        for (const id of matched) {
-          const entry = events.get(id)
+        for (const eid of matched) {
+          const entry = events.get(eid)
           if (entry && !entry.sourceObjectId) {
             entry.sourceObjectId = object.id
             entry.sourceObject = object

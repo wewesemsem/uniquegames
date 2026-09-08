@@ -11,5 +11,5 @@ export async function directWorld(prompt, options) {
   if (!text) {
     throw new Error('Describe a world to explore.')
   }
-  return generateWorldSpecification(text, { ...options, onEvent: options?.onEvent })
+  return generateWorldSpecification(text, options)
 }

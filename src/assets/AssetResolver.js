@@ -58,6 +58,14 @@ export function createAssetResolver(options = {}) {
       : Math.max(0, Number(options.maxGeneratedImages) || 0)
   let generatedImages = 0
 
+  function claimPanoramaSlot() {
+    if (generatedImages >= maxGeneratedImages) {
+      return false
+    }
+    generatedImages += 1
+    return true
+  }
+
   async function tryProviders(list, request) {
     let lastReason = 'No provider resolved the request.'
     for (const provider of list) {
@@ -112,12 +120,10 @@ export function createAssetResolver(options = {}) {
 
     const configured = generationProviders.filter((provider) => provider.configured !== false)
     const applicable = configured.filter((provider) => providerCanHandle(provider, request))
-    const allowGeneration = request.kind !== 'panorama' || generatedImages < maxGeneratedImages
+    const allowGeneration =
+      request.kind !== 'panorama' ? applicable.length > 0 : claimPanoramaSlot()
 
-    if (applicable.length > 0 && allowGeneration) {
-      if (request.kind === 'panorama') {
-        generatedImages += 1
-      }
+    if (applicable.length > 0 && (request.kind !== 'panorama' ? true : allowGeneration)) {
       if (budget && !budget.canGenerate()) {
         log?.('asset_generation_rejected', { requestId, reason: 'budget', kind: request.kind })
         generationReason = 'Generation budget exhausted.'
@@ -169,10 +175,10 @@ export function createAssetResolver(options = {}) {
 
   async function resolveWorld(specification, { onRoom, onStatus } = {}) {
     const generationRequests = []
-    const rooms = []
     const total = specification.rooms.length
+    const rooms = new Array(total)
 
-    for (const [index, room] of specification.rooms.entries()) {
+    async function resolveRoomAt(index, room) {
       await onStatus?.({
         index,
         total,
@@ -180,8 +186,8 @@ export function createAssetResolver(options = {}) {
           index === 0
             ? 'Painting the first 360° view...'
             : index === total - 1
-              ? 'Almost done...'
-              : 'Give us a moment...',
+              ? 'Finishing the last room in the background...'
+              : 'Painting more rooms in the background...',
       })
 
       const panoRequest = {
@@ -212,17 +218,26 @@ export function createAssetResolver(options = {}) {
         objects.push({ need: object, asset: resolved.asset })
       }
 
-      const entry = {
+      return {
         spec: room,
         panorama: panorama.asset,
         objects,
       }
-      rooms.push(entry)
-      await onRoom?.({
-        room: entry,
-        index,
-        total,
-      })
+    }
+
+    // Unlock the player on room 1 as soon as its panorama is ready.
+    rooms[0] = await resolveRoomAt(0, specification.rooms[0])
+    await onRoom?.({ room: rooms[0], index: 0, total })
+
+    // Rooms 2–N paint in parallel while the user explores room 1.
+    if (total > 1) {
+      await Promise.all(
+        specification.rooms.slice(1).map(async (room, offset) => {
+          const index = offset + 1
+          rooms[index] = await resolveRoomAt(index, room)
+          await onRoom?.({ room: rooms[index], index, total })
+        })
+      )
     }
 
     return { rooms, generationRequests, generation: budgetSnapshot() }

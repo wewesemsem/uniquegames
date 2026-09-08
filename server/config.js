@@ -15,14 +15,21 @@ export const ENVIRONMENT_MODES = Object.freeze({
   PROCEDURAL_360: 'PROCEDURAL_360',
 })
 
-function environmentModeFromEnv(env) {
-  const raw = String(env.ENVIRONMENT_MODE || env.PANORAMA_MODE || ENVIRONMENT_MODES.PROCEDURAL_360)
+export function parseEnvironmentMode(value, fallback = ENVIRONMENT_MODES.PROCEDURAL_360) {
+  const raw = String(value ?? '')
     .trim()
     .toUpperCase()
   if (raw === ENVIRONMENT_MODES.IMAGE_GENERATION || raw === 'IMAGE' || raw === 'PANORAMA') {
     return ENVIRONMENT_MODES.IMAGE_GENERATION
   }
-  return ENVIRONMENT_MODES.PROCEDURAL_360
+  if (raw === ENVIRONMENT_MODES.PROCEDURAL_360 || raw === 'PROCEDURAL' || raw === 'P5') {
+    return ENVIRONMENT_MODES.PROCEDURAL_360
+  }
+  return fallback
+}
+
+function environmentModeFromEnv(env) {
+  return parseEnvironmentMode(env.ENVIRONMENT_MODE || env.PANORAMA_MODE, ENVIRONMENT_MODES.PROCEDURAL_360)
 }
 
 export function loadServerConfig(env = process.env) {
@@ -81,7 +88,7 @@ export function loadServerConfig(env = process.env) {
     imageModel: env.IMAGE_MODEL || 'gpt-image-1',
     imageSize: env.IMAGE_SIZE || '1536x1024',
     imageQuality: env.IMAGE_QUALITY || 'high',
-    imageGenerationCount: intEnv(env, 'IMAGE_GENERATION_COUNT', 1),
+    imageGenerationCount: intEnv(env, 'IMAGE_GENERATION_COUNT', 3),
     imageTimeoutMs: intEnv(env, 'IMAGE_TIMEOUT_MS', 120_000),
     generatedAssetDir: env.GENERATED_ASSET_DIR || 'public/generated',
     redisUrl: env.REDIS_URL || '',

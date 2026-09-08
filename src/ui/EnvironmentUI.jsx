@@ -67,6 +67,7 @@ export function EnvironmentUI({ store }) {
         <button
           type="button"
           className="collapse-button"
+          data-tutorial="info"
           aria-expanded={open}
           aria-controls="overlay-details"
           onClick={() => setOpen((value) => !value)}

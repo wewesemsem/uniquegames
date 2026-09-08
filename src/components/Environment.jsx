@@ -19,12 +19,14 @@ import { environmentStore, navigateTo, useEnvironment } from '../navigation/Envi
 export function Environment() {
   const { current, currentId } = useEnvironment()
   const isPlayground = currentId === 'playground'
-  const hasProcedural = Boolean(current?.procedural) && !isPlayground
-  const hasPanorama = Boolean(current?.panorama) && !hasProcedural && !isPlayground
+  // AI image panoramas win over procedural skies when both exist (HQ / AI images mode).
+  const hasPanorama = Boolean(current?.panorama) && !isPlayground
+  const hasProcedural = Boolean(current?.procedural) && !hasPanorama && !isPlayground
   const hasSky = isPlayground || hasProcedural || hasPanorama
   const ground = isPlayground ? 'none' : current?.procedural?.ground
   const openSky =
     isPlayground ||
+    hasPanorama ||
     ground === 'sand' ||
     ground === 'lunar' ||
     ground === 'none' ||

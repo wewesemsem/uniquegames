@@ -93,14 +93,19 @@ function contentType(response) {
   return String(header(response, 'Content-Type') || '')
 }
 
-export async function generateWorldSpecification(prompt, { onEvent, signal } = {}) {
+export async function generateWorldSpecification(prompt, { onEvent, signal, environmentMode } = {}) {
+  const body = { prompt }
+  if (environmentMode) {
+    body.environmentMode = environmentMode
+  }
+
   const response = await fetch('/api/world/generate', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: onEvent ? 'application/x-ndjson' : 'application/json',
     },
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify(body),
     signal,
   })
 

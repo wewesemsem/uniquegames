@@ -246,11 +246,13 @@ export function buildWorld(specification, resolved) {
       return fromLandmark ?? { need, asset: null }
     })
 
+    const panoramaUrl = resolvedRoom?.panorama?.url ?? null
     environments[room.id] = {
       id: room.id,
       name: room.name,
-      panorama: resolvedRoom?.panorama?.url ?? null,
-      procedural: mergeSceneConfigs(resolvedRoom?.procedural ?? null, composed.scene),
+      panorama: panoramaUrl,
+      // Keep procedural sky only when there is no AI/image panorama to show.
+      procedural: panoramaUrl ? null : mergeSceneConfigs(resolvedRoom?.procedural ?? null, composed.scene),
       composition: composed.composition,
       animation: composed.animation,
       interactions: sanitizeInteractions(composed.interactions),

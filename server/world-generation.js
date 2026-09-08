@@ -24,6 +24,7 @@ import {
   newRequestId,
   worldRatePolicies,
   ENVIRONMENT_MODES,
+  parseEnvironmentMode,
 } from './config.js'
 import { createGenerationBudget } from './generation-budget.js'
 import { PayloadTooLargeError, readJsonBody, sendJson, sendRateLimited, wantsNdjson, beginNdjson, writeNdjson } from './http.js'
@@ -296,9 +297,16 @@ export function createWorldGenerationHandler(env = {}, deps = {}) {
 
   const directWorld = deps.directWorld ?? defaultDirectWorld
 
-  function defaultCreateResolver(resolverOptions) {
+  function defaultCreateResolver(resolverOptions = {}) {
+    const environmentMode = resolverOptions.environmentMode ?? config.environmentMode
     const imageConfigured = Boolean(config.imageApiKey)
-    const useImageGeneration = config.environmentMode === ENVIRONMENT_MODES.IMAGE_GENERATION
+    const useImageGeneration = environmentMode === ENVIRONMENT_MODES.IMAGE_GENERATION
+    const maxGeneratedImages =
+      resolverOptions.maxGeneratedImages != null
+        ? resolverOptions.maxGeneratedImages
+        : useImageGeneration
+          ? config.imageGenerationCount
+          : 0
 
     // IMAGE_GENERATION path keeps the existing OpenAI image provider intact.
     // PROCEDURAL_360 skips expensive panorama providers entirely — image code stays imported.
@@ -328,27 +336,28 @@ export function createWorldGenerationHandler(env = {}, deps = {}) {
           createGeneratedAssetProvider(),
         ]
 
+    const { environmentMode: _ignoredMode, maxGeneratedImages: _ignoredMax, ...rest } = resolverOptions
     return createAssetResolver({
-      ...resolverOptions,
+      ...rest,
       providers: panoramaProviders,
-      maxGeneratedImages: useImageGeneration ? config.imageGenerationCount : 0,
+      maxGeneratedImages: useImageGeneration ? maxGeneratedImages : 0,
     })
   }
 
   const createResolver = deps.createResolver ?? defaultCreateResolver
   const directScenes = deps.directScenes ?? directProceduralScenes
 
-  function modelsFor(directed) {
-    const procedural = config.environmentMode === ENVIRONMENT_MODES.PROCEDURAL_360
+  function modelsFor(directed, environmentMode = config.environmentMode) {
+    const procedural = environmentMode === ENVIRONMENT_MODES.PROCEDURAL_360
     return {
       director: directed.director === 'llm' ? config.llmModel : null,
       image: !procedural && config.imageApiKey ? config.imageModel : null,
-      environmentMode: config.environmentMode,
+      environmentMode,
       scene: procedural ? config.llmModel || 'heuristic' : null,
     }
   }
 
-  function generationPayload(resolved, generation, duplicate) {
+  function generationPayload(resolved, generation, duplicate, environmentMode = config.environmentMode) {
     const panoramaMisses = (resolved.generationRequests ?? []).filter(
       (item) => item.request?.kind === 'panorama' && !item.skipped
     )
@@ -358,12 +367,13 @@ export function createWorldGenerationHandler(env = {}, deps = {}) {
       reasons: [...new Set(panoramaMisses.map((item) => item.reason).filter(Boolean))].slice(0, 3),
       duplicate: Boolean(duplicate),
       imageLimit: config.imageGenerationCount,
-      environmentMode: config.environmentMode,
+      environmentMode,
       sceneSource: resolved.sceneSource ?? null,
     }
   }
 
-  function successPayload({ directed, resolved, generation, requestId, duplicate }) {
+  function successPayload({ directed, resolved, generation, requestId, duplicate, environmentMode }) {
+    const mode = environmentMode ?? config.environmentMode
     return {
       specification: directed.specification,
       resolved: {
@@ -372,9 +382,9 @@ export function createWorldGenerationHandler(env = {}, deps = {}) {
       director: directed.director,
       retries: directed.retries ?? 0,
       notice: directed.notice,
-      models: modelsFor(directed),
-      generation: generationPayload(resolved, generation, duplicate),
-      environmentMode: config.environmentMode,
+      models: modelsFor(directed, mode),
+      generation: generationPayload(resolved, generation, duplicate, mode),
+      environmentMode: mode,
       requestId,
     }
   }
@@ -460,13 +470,15 @@ export function createWorldGenerationHandler(env = {}, deps = {}) {
     }
   }
 
-  async function produceWorld({ prompt, requestId, subject, rates, onWorld, onRoom, onStatus }) {
+  async function produceWorld({ prompt, requestId, subject, rates, environmentMode, onWorld, onRoom, onStatus }) {
+    const mode = parseEnvironmentMode(environmentMode, config.environmentMode)
     await onStatus?.({ message: 'Building your world...' })
     const directed = await directWorld({ prompt, requestId, subject })
     assertWorldSizeLimits(directed.specification, config.world)
+    directed.environmentMode = mode
     await onWorld?.(directed)
 
-    if (config.environmentMode === ENVIRONMENT_MODES.PROCEDURAL_360) {
+    if (mode === ENVIRONMENT_MODES.PROCEDURAL_360) {
       const resolved = await resolveProceduralWorld({
         specification: directed.specification,
         prompt,
@@ -474,20 +486,30 @@ export function createWorldGenerationHandler(env = {}, deps = {}) {
         onRoom,
         onStatus,
       })
-      return { directed, resolved, generation: resolved.generation }
+      return { directed, resolved, generation: resolved.generation, environmentMode: mode }
     }
 
     log('environment_pipeline', {
       requestId,
       mode: ENVIRONMENT_MODES.IMAGE_GENERATION,
       path: 'LLM → image model → 360 image',
+      imageModel: config.imageModel,
+      imageQuality: config.imageQuality,
     })
-    await onStatus?.({ message: 'Give us a moment...' })
+    await onStatus?.({ message: 'Painting high-quality 360° skies (this can take 1–2 minutes)...' })
+
+    const roomCount = directed.specification.rooms?.length ?? config.world.maxRooms
+    // Generate a panorama for every room so rooms 2–3 can stream in behind room 1.
+    const maxGeneratedImages = Math.min(
+      roomCount,
+      Math.max(config.imageGenerationCount, roomCount),
+      config.world.maxGeneratedAssetsPerWorld
+    )
 
     const generationBudget = createGenerationBudget({
       requestId,
       userKey: subject.key,
-      maxGeneratedAssets: config.world.maxGeneratedAssetsPerWorld,
+      maxGeneratedAssets: Math.max(config.world.maxGeneratedAssetsPerWorld, maxGeneratedImages),
     })
 
     const resolver = createResolver({
@@ -498,10 +520,12 @@ export function createWorldGenerationHandler(env = {}, deps = {}) {
       subjectKey: subject.key,
       log,
       requestId,
+      environmentMode: mode,
+      maxGeneratedImages,
     })
 
     const resolved = await resolver.resolveWorld(directed.specification, { onRoom, onStatus })
-    return { directed, resolved, generation: generationBudget.snapshot() }
+    return { directed, resolved, generation: generationBudget.snapshot(), environmentMode: mode }
   }
 
   return async function handleWorldGenerate(req, res) {
@@ -558,15 +582,18 @@ export function createWorldGenerationHandler(env = {}, deps = {}) {
       return
     }
 
-    const extraKeys = Object.keys(body).filter((key) => key !== 'prompt')
+    const allowedKeys = new Set(['prompt', 'environmentMode'])
+    const extraKeys = Object.keys(body).filter((key) => !allowedKeys.has(key))
     if (extraKeys.length > 0) {
       abuse.recordValidationFailure(subject.key)
       log('validation_failure', { requestId, reason: 'unexpected_fields' })
-      sendJson(res, 400, { error: 'invalid_request', message: 'Request may only include a prompt.' }, { headers: { 'X-Request-ID': requestId } })
+      sendJson(res, 400, { error: 'invalid_request', message: 'Request may only include prompt and environmentMode.' }, { headers: { 'X-Request-ID': requestId } })
       return
     }
 
-    const promptHash = hashPrompt(prompt)
+    const environmentMode = parseEnvironmentMode(body.environmentMode, config.environmentMode)
+
+    const promptHash = hashPrompt(`${environmentMode}:${prompt}`)
     abuse.recordIdentical(subject.key, promptHash)
     const restriction = abuse.restriction(subject.key, promptHash)
     if (restriction.restricted) {
@@ -584,13 +611,20 @@ export function createWorldGenerationHandler(env = {}, deps = {}) {
 
       if (stream) {
         beginNdjson(res, { requestId })
-        writeNdjson(res, { type: 'status', message: 'Building your world...' })
+        writeNdjson(res, {
+          type: 'status',
+          message:
+            environmentMode === ENVIRONMENT_MODES.IMAGE_GENERATION
+              ? 'Painting high-quality 360° skies (this can take 1–2 minutes)...'
+              : 'Building your world...',
+        })
 
         const produced = await produceWorld({
           prompt,
           requestId,
           subject,
           rates,
+          environmentMode,
           onStatus: ({ message, index, total }) => {
             writeNdjson(res, { type: 'status', message, index, total })
           },
@@ -601,7 +635,8 @@ export function createWorldGenerationHandler(env = {}, deps = {}) {
               director: directed.director,
               retries: directed.retries ?? 0,
               notice: directed.notice,
-              models: modelsFor(directed),
+              models: modelsFor(directed, environmentMode),
+              environmentMode,
               requestId,
             })
           },
@@ -621,7 +656,7 @@ export function createWorldGenerationHandler(env = {}, deps = {}) {
           duration: now() - started,
           director: produced.directed.director,
           duplicate: false,
-          environmentMode: config.environmentMode,
+          environmentMode,
           generationCount: produced.generation?.generatedAssets ?? 0,
           panoramaFailures: panoramaMisses.length,
           stream: true,
@@ -631,10 +666,19 @@ export function createWorldGenerationHandler(env = {}, deps = {}) {
         return
       }
 
-      const job = await idempotency.run(`${subject.key}:${promptHash}`, async () => produceWorld({ prompt, requestId, subject, rates }))
+      const job = await idempotency.run(`${subject.key}:${promptHash}`, async () =>
+        produceWorld({ prompt, requestId, subject, rates, environmentMode })
+      )
 
       const { directed, resolved, generation } = job.value
-      const payload = successPayload({ directed, resolved, generation, requestId, duplicate: job.duplicate })
+      const payload = successPayload({
+        directed,
+        resolved,
+        generation,
+        requestId,
+        duplicate: job.duplicate,
+        environmentMode: job.value.environmentMode ?? environmentMode,
+      })
       log('request_completed', {
         requestId,
         route: '/api/world/generate',
@@ -642,7 +686,7 @@ export function createWorldGenerationHandler(env = {}, deps = {}) {
         duration: now() - started,
         director: directed.director,
         duplicate: job.duplicate,
-        environmentMode: config.environmentMode,
+        environmentMode: payload.environmentMode,
         generationCount: generation?.generatedAssets ?? 0,
         panoramaFailures: payload.generation.missing,
       })

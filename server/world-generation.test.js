@@ -410,4 +410,44 @@ describe('POST /api/world/generate', () => {
       assert.equal(room.procedural.sky, 'stars')
     }
   })
+
+  it('allows per-request IMAGE_GENERATION override with high-quality gpt-image-1', async () => {
+    const { createMemoryImageStore } = await import('./images/store.js')
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64'
+    )
+    let imageCalls = 0
+    const { handle } = createHandler(
+      { IMAGE_API_KEY: 'sk-image', ENVIRONMENT_MODE: 'PROCEDURAL_360' },
+      {
+        imageStore: createMemoryImageStore(),
+        imageFetch: async (url, options) => {
+          imageCalls += 1
+          const payload = JSON.parse(options.body)
+          assert.equal(payload.model, 'gpt-image-1')
+          assert.equal(payload.quality, 'high')
+          assert.equal(payload.size, '1536x1024')
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => 'application/json' },
+            async json() {
+              return { data: [{ b64_json: png.toString('base64') }] }
+            },
+          }
+        },
+      }
+    )
+
+    const res = await post(handle, {
+      body: { prompt: 'I want to explore space.', environmentMode: 'IMAGE_GENERATION' },
+    })
+    assert.equal(res.statusCode, 200)
+    assert.equal(imageCalls, 1)
+    assert.equal(res.payload.environmentMode, 'IMAGE_GENERATION')
+    assert.equal(res.payload.models.image, 'gpt-image-1')
+    assert.equal(res.payload.models.environmentMode, 'IMAGE_GENERATION')
+    assert.match(res.payload.resolved.rooms[0].panorama.url, /^\/generated\/panoramas\//)
+  })
 })
