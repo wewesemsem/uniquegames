@@ -120,10 +120,9 @@ export function createAssetResolver(options = {}) {
 
     const configured = generationProviders.filter((provider) => provider.configured !== false)
     const applicable = configured.filter((provider) => providerCanHandle(provider, request))
-    const allowGeneration =
-      request.kind !== 'panorama' ? applicable.length > 0 : claimPanoramaSlot()
+    const panoramaAllowed = request.kind !== 'panorama' || claimPanoramaSlot()
 
-    if (applicable.length > 0 && (request.kind !== 'panorama' ? true : allowGeneration)) {
+    if (applicable.length > 0 && panoramaAllowed) {
       if (budget && !budget.canGenerate()) {
         log?.('asset_generation_rejected', { requestId, reason: 'budget', kind: request.kind })
         generationReason = 'Generation budget exhausted.'
@@ -167,7 +166,7 @@ export function createAssetResolver(options = {}) {
       generationRequest: {
         request,
         reason: generationReason,
-        skipped: Boolean(applicable.length > 0 && !allowGeneration && request.kind === 'panorama'),
+        skipped: Boolean(applicable.length > 0 && request.kind === 'panorama' && !panoramaAllowed),
       },
       source: 'fallback',
     }

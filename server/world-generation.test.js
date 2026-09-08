@@ -241,16 +241,47 @@ describe('POST /api/world/generate', () => {
 
     const res = await post(handle, { body: { prompt: 'I want to explore space.' } })
     assert.equal(res.statusCode, 200)
-    assert.equal(imageCalls, 1)
+    assert.equal(imageCalls, 3)
     const rooms = res.payload.resolved.rooms
     assert.equal(rooms.length, 3)
     assert.match(rooms[0].panorama.url, /^\/generated\/panoramas\//)
     assert.equal(rooms[0].panorama.source, 'generated')
-    assert.equal(rooms[1].panorama.source, 'fallback')
-    assert.equal(rooms[2].panorama.source, 'fallback')
-    assert.equal(res.payload.generation.generatedAssets, 1)
-    assert.equal(res.payload.generation.imageLimit, 1)
+    assert.equal(rooms[1].panorama.source, 'generated')
+    assert.equal(rooms[2].panorama.source, 'generated')
+    assert.equal(res.payload.generation.generatedAssets, 3)
+    assert.equal(res.payload.generation.imageLimit, 3)
     assert.equal(res.payload.models.image, 'gpt-image-1')
+  })
+
+  it('respects IMAGE_GENERATION_COUNT=1 and falls back for later rooms', async () => {
+    const { createMemoryImageStore } = await import('./images/store.js')
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64'
+    )
+    let imageCalls = 0
+    const { handle } = createHandler(
+      { IMAGE_API_KEY: 'sk-image', IMAGE_GENERATION_COUNT: '1', ENVIRONMENT_MODE: 'IMAGE_GENERATION' },
+      {
+        imageStore: createMemoryImageStore(),
+        imageFetch: async () => {
+          imageCalls += 1
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => 'application/json' },
+            async json() {
+              return { data: [{ b64_json: png.toString('base64') }] }
+            },
+          }
+        },
+      }
+    )
+    const res = await post(handle, { body: { prompt: 'I want to explore space.' } })
+    assert.equal(imageCalls, 1)
+    assert.equal(res.payload.resolved.rooms[0].panorama.source, 'generated')
+    assert.equal(res.payload.resolved.rooms[1].panorama.source, 'fallback')
+    assert.equal(res.payload.generation.imageLimit, 1)
   })
 
   it('can generate one panorama per room when IMAGE_GENERATION_COUNT is raised', async () => {
@@ -298,11 +329,11 @@ describe('POST /api/world/generate', () => {
     assert.equal(res.statusCode, 200)
     assert.ok(res.payload.resolved.rooms[0].panorama.url)
     assert.equal(res.payload.resolved.rooms[0].panorama.source, 'fallback')
-    assert.equal(res.payload.generation.missing, 1)
+    assert.equal(res.payload.generation.missing, 3)
     assert.ok(res.payload.generation.reasons.some((reason) => /image API down/i.test(reason)))
   })
 
-  it('streams each room as soon as its panorama is ready', async () => {
+  it('streams room 1 first while later rooms continue', async () => {
     const { createMemoryImageStore } = await import('./images/store.js')
     const png = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -311,7 +342,7 @@ describe('POST /api/world/generate', () => {
     const gates = []
     let imageCalls = 0
     const { handle } = createHandler(
-      { IMAGE_API_KEY: 'sk-image', ENVIRONMENT_MODE: 'IMAGE_GENERATION' },
+      { IMAGE_API_KEY: 'sk-image', IMAGE_GENERATION_COUNT: '3', ENVIRONMENT_MODE: 'IMAGE_GENERATION' },
       {
         imageStore: createMemoryImageStore(),
         imageFetch: async () => {
@@ -341,7 +372,7 @@ describe('POST /api/world/generate', () => {
     async function waitFor(predicate) {
       const started = Date.now()
       while (!predicate()) {
-        if (Date.now() - started > 1000) {
+        if (Date.now() - started > 2000) {
           throw new Error('timed out waiting for stream event')
         }
         await new Promise((resolve) => setTimeout(resolve, 10))
@@ -352,16 +383,24 @@ describe('POST /api/world/generate', () => {
     assert.equal(res.events.filter((event) => event.type === 'room').length, 0)
     assert.ok(res.events.some((event) => event.type === 'world'))
 
+    // Finish room 1 only — player can enter while rooms 2–3 are still gated.
     gates[0]()
     await waitFor(() => res.events.some((event) => event.type === 'room' && event.index === 0))
+    assert.equal(res.events.filter((event) => event.type === 'room').length, 1)
+
+    // Background rooms start after room 1 unlocks.
+    await waitFor(() => gates.length >= 3)
+    gates[1]()
+    gates[2]()
     await finished
 
     const rooms = res.events.filter((event) => event.type === 'room')
     assert.equal(rooms.length, 3)
     assert.equal(rooms[0].room.panorama.source, 'generated')
-    assert.equal(rooms[1].room.panorama.source, 'fallback')
+    assert.equal(rooms[1].room.panorama.source, 'generated')
+    assert.equal(rooms[2].room.panorama.source, 'generated')
     assert.ok(res.events.some((event) => event.type === 'done'))
-    assert.equal(imageCalls, 1)
+    assert.equal(imageCalls, 3)
     assert.match(String(res.headers['content-type']), /ndjson/)
   })
 
@@ -444,10 +483,11 @@ describe('POST /api/world/generate', () => {
       body: { prompt: 'I want to explore space.', environmentMode: 'IMAGE_GENERATION' },
     })
     assert.equal(res.statusCode, 200)
-    assert.equal(imageCalls, 1)
+    assert.equal(imageCalls, 3)
     assert.equal(res.payload.environmentMode, 'IMAGE_GENERATION')
     assert.equal(res.payload.models.image, 'gpt-image-1')
     assert.equal(res.payload.models.environmentMode, 'IMAGE_GENERATION')
     assert.match(res.payload.resolved.rooms[0].panorama.url, /^\/generated\/panoramas\//)
+    assert.ok(res.payload.resolved.rooms.every((room) => room.panorama.source === 'generated'))
   })
 })

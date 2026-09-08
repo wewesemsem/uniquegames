@@ -39,9 +39,9 @@ const IMAGE_WAIT_BEATS = [
 ]
 
 const MORE_BEATS = [
-  "You're in. Give us a moment — more rooms are still painting.",
-  'Almost done...',
-  'Hang tight, finishing the other skies...',
+  "You're in. More rooms are still painting in the background...",
+  'Almost done with the other skies...',
+  'Hang tight — finishing rooms 2 and 3...',
 ]
 
 function shortFailureHint(reason) {

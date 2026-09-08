@@ -499,10 +499,10 @@ export function createWorldGenerationHandler(env = {}, deps = {}) {
     await onStatus?.({ message: 'Painting high-quality 360° skies (this can take 1–2 minutes)...' })
 
     const roomCount = directed.specification.rooms?.length ?? config.world.maxRooms
-    // Generate a panorama for every room so rooms 2–3 can stream in behind room 1.
+    // Default IMAGE_GENERATION_COUNT is 3 — one panorama per room.
     const maxGeneratedImages = Math.min(
       roomCount,
-      Math.max(config.imageGenerationCount, roomCount),
+      config.imageGenerationCount,
       config.world.maxGeneratedAssetsPerWorld
     )
 
