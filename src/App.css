@@ -1,0 +1,384 @@
+.app-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.overlay-card {
+  pointer-events: auto;
+  margin: 16px;
+  padding: 10px 12px;
+  max-width: min(240px, calc(100vw - 32px));
+  border-radius: 12px;
+  background: rgba(12, 14, 22, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.overlay-card.is-collapsed {
+  max-width: 220px;
+}
+
+.overlay-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.overlay-title {
+  min-width: 0;
+  flex: 1;
+}
+
+.overlay-title .kicker {
+  margin: 0;
+}
+
+.overlay-card h1 {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.collapse-button {
+  flex-shrink: 0;
+  cursor: pointer;
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: #101218;
+  background: #c9f07d;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.collapse-button:hover {
+  background: #d8f59a;
+}
+
+.overlay-details {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.kicker {
+  margin: 0 0 2px;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(244, 246, 251, 0.62);
+}
+
+.overlay-card p {
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+}
+
+.status-on {
+  color: #7dffc3;
+}
+
+.status-off {
+  color: #ffb4a8;
+}
+
+.status-warn {
+  color: #ffd58a;
+}
+
+.status-loading {
+  color: #d8f59a;
+}
+
+.hint {
+  color: rgba(244, 246, 251, 0.72);
+  font-size: 0.75rem !important;
+  line-height: 1.35;
+}
+
+.overlay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.vr-button,
+.ghost-button,
+.env-nav-item {
+  pointer-events: auto;
+  cursor: pointer;
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font: inherit;
+  font-weight: 650;
+}
+
+.vr-button {
+  color: #101218;
+  background: #c9f07d;
+}
+
+.vr-button:hover {
+  background: #d8f59a;
+}
+
+.ghost-button {
+  color: #f4f6fb;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ghost-button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.env-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.env-nav-item {
+  text-align: left;
+  color: #f4f6fb;
+  background: rgba(255, 255, 255, 0.06);
+  font-weight: 550;
+}
+
+.env-nav-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.env-nav-item.is-current {
+  background: rgba(201, 240, 125, 0.22);
+  color: #e8ffb5;
+}
+
+.reticle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.world-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  width: min(440px, calc(100vw - 24px));
+  pointer-events: none;
+}
+
+.world-prompt-card {
+  pointer-events: auto;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(12, 14, 22, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.world-prompt-card h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.world-prompt-card textarea {
+  display: block;
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  resize: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(8, 10, 16, 0.72);
+  color: inherit;
+  font: inherit;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.world-prompt-card textarea:focus {
+  outline: 1px solid rgba(201, 240, 125, 0.7);
+}
+
+.world-prompt-card textarea:disabled {
+  opacity: 0.7;
+}
+
+.world-prompt-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.world-prompt-mic-missing {
+  font-size: 0.75rem;
+  color: rgba(244, 246, 251, 0.55);
+}
+
+.ghost-button.is-listening {
+  background: rgba(201, 240, 125, 0.28);
+  color: #e8ffb5;
+}
+
+.vr-button:disabled,
+.ghost-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* CSS atmosphere overlays — params from SceneConfiguration, never LLM CSS */
+.scene-atmosphere {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  transition:
+    background 0.8s ease,
+    opacity 0.8s ease,
+    box-shadow 0.8s ease;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 55%,
+    rgba(0, 0, 0, calc(0.08 + var(--fog-strength, 0.2) * 0.2)) 100%
+  );
+}
+
+.scene-atmosphere.mood-warm {
+  box-shadow: inset 0 0 120px rgba(255, 140, 70, 0.18);
+}
+
+.scene-atmosphere.mood-cool {
+  box-shadow: inset 0 0 120px rgba(80, 140, 255, 0.16);
+}
+
+.scene-atmosphere.mood-eerie {
+  box-shadow: inset 0 0 140px rgba(120, 70, 200, 0.22);
+}
+
+.scene-atmosphere.mood-vivid {
+  box-shadow: inset 0 0 100px rgba(255, 210, 80, 0.14);
+}
+
+.scene-atmosphere.is-space {
+  background: radial-gradient(ellipse at 30% 20%, rgba(80, 120, 255, 0.06), transparent 45%),
+    radial-gradient(ellipse at center, transparent 62%, rgba(0, 0, 0, 0.22) 100%);
+}
+
+.scene-atmosphere.light-low {
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(0, 0, 0, 0.28) 100%);
+}
+
+.scene-atmosphere.is-underwater {
+  background: linear-gradient(180deg, rgba(20, 80, 120, 0.18), rgba(0, 30, 50, 0.35));
+  animation: caustic-shift calc(8s / var(--anim-speed, 1)) ease-in-out infinite alternate;
+}
+
+.scene-atmosphere.is-desert {
+  background: radial-gradient(ellipse at 50% 0%, rgba(255, 190, 100, 0.12), transparent 55%);
+}
+
+.scene-atmosphere.has-heat-haze {
+  animation: heat-haze calc(6s / var(--anim-speed, 1)) ease-in-out infinite alternate;
+}
+
+.scene-atmosphere.has-godrays::before {
+  content: '';
+  position: absolute;
+  inset: -10%;
+  background: repeating-linear-gradient(
+    -18deg,
+    transparent 0 40px,
+    rgba(255, 240, 200, 0.04) 40px 48px
+  );
+  animation: godray-drift calc(14s / var(--anim-speed, 1)) linear infinite;
+}
+
+.scene-atmosphere.has-aurora::after,
+.scene-atmosphere.has-nebula::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 70% 15%, rgba(140, 90, 255, calc(0.12 + var(--nebula-strength, 0) * 0.2)), transparent 40%),
+    radial-gradient(ellipse at 20% 30%, rgba(60, 180, 255, 0.1), transparent 35%);
+  animation: aurora-pulse calc(10s / var(--anim-speed, 1)) ease-in-out infinite alternate;
+}
+
+.scene-atmosphere.light-dramatic {
+  box-shadow: inset 0 -80px 100px rgba(255, 120, 40, 0.12), inset 0 0 80px rgba(0, 0, 0, 0.25);
+}
+
+@keyframes caustic-shift {
+  from {
+    filter: hue-rotate(-6deg) brightness(0.98);
+  }
+  to {
+    filter: hue-rotate(8deg) brightness(1.05);
+  }
+}
+
+@keyframes heat-haze {
+  from {
+    transform: scale(1) translateY(0);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.02) translateY(-1%);
+    opacity: 1;
+  }
+}
+
+@keyframes godray-drift {
+  from {
+    transform: translateX(-2%);
+  }
+  to {
+    transform: translateX(2%);
+  }
+}
+
+@keyframes aurora-pulse {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
