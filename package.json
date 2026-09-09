@@ -10,7 +10,13 @@
     "generate:panoramas": "node scripts/generate-panoramas.mjs",
     "build": "vite build",
     "preview": "vite preview --host",
+    "start": "node server/index.js",
+    "start:api": "node --env-file=.env server/index.js",
+    "heroku-postbuild": "mkdir -p public/generated/panoramas",
     "test": "node --test server src/world src/assets src/api src/interaction"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.6",

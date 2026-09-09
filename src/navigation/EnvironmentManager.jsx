@@ -241,7 +241,7 @@ function createEnvironmentStore() {
       return
     }
     const env = worldMap[id]
-    if (env?.panorama && String(env.panorama).startsWith('/generated/')) {
+    if (env?.panorama && String(env.panorama).includes('/generated/')) {
       worldMap[id] = { ...env, panorama: '/panoramas/room-2.jpg' }
       emit({
         current: worldMap[id],

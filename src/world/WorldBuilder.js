@@ -8,6 +8,7 @@
 
 import { resolveProceduralObject } from '../procedural/objects/ObjectResolver.js'
 import { isLandmarkType } from '../procedural/objects/types.js'
+import { resolveAssetUrl } from '../api/apiBase.js'
 import { composeRoom, mergeComposedObjects, mergeSceneConfigs } from './SceneComposer.js'
 import { matchObjectAnimation } from './AnimationSchema.js'
 import { matchObjectInteractions, objectIsInteractive, sanitizeInteractions } from './InteractionSchema.js'
@@ -246,7 +247,7 @@ export function buildWorld(specification, resolved) {
       return fromLandmark ?? { need, asset: null }
     })
 
-    const panoramaUrl = resolvedRoom?.panorama?.url ?? null
+    const panoramaUrl = resolveAssetUrl(resolvedRoom?.panorama?.url ?? null)
     environments[room.id] = {
       id: room.id,
       name: room.name,

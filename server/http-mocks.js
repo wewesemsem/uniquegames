@@ -1,12 +1,19 @@
 import { Readable } from 'node:stream'
 
-export function createMockReq({ body = { prompt: 'I want to explore space.' }, ip = '127.0.0.1', headers = {}, raw } = {}) {
-  const payload = raw ?? Buffer.from(JSON.stringify(body))
-  const req = Readable.from([payload])
+export function createMockReq({
+  body = { prompt: 'I want to explore space.' },
+  ip = '127.0.0.1',
+  headers = {},
+  method = 'POST',
+  url = '/api/world/generate',
+  raw,
+} = {}) {
+  const payload = raw ?? Buffer.from(JSON.stringify(body ?? {}))
+  const req = Readable.from(method === 'GET' || method === 'HEAD' || method === 'OPTIONS' ? [] : [payload])
   req.headers = { 'content-type': 'application/json', ...headers }
   req.socket = { remoteAddress: ip }
-  req.method = 'POST'
-  req.url = '/api/world/generate'
+  req.method = method
+  req.url = url
   return req
 }
 

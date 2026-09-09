@@ -1,3 +1,5 @@
+import { apiUrl } from './apiBase.js'
+
 export class ApiError extends Error {
   constructor({ error = 'request_failed', message, status, retryAfter = null, requestId = null } = {}) {
     super(message || 'Request failed.')
@@ -99,7 +101,7 @@ export async function generateWorldSpecification(prompt, { onEvent, signal, envi
     body.environmentMode = environmentMode
   }
 
-  const response = await fetch('/api/world/generate', {
+  const response = await fetch(apiUrl('/api/world/generate'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
