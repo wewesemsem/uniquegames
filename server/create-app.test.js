@@ -18,6 +18,17 @@ describe('cors', () => {
     assert.equal(resolveCorsOrigin('https://app.netlify.app', origins), 'https://app.netlify.app')
     assert.equal(resolveCorsOrigin('https://evil.example', origins), null)
   })
+
+  it('ignores trailing slashes on configured origins', () => {
+    const origins = parseCorsOrigins({
+      CORS_ORIGINS: 'https://3dworldgames.netlify.app/',
+    })
+    assert.deepEqual(origins, ['https://3dworldgames.netlify.app'])
+    assert.equal(
+      resolveCorsOrigin('https://3dworldgames.netlify.app', origins),
+      'https://3dworldgames.netlify.app'
+    )
+  })
 })
 
 describe('createApp', () => {

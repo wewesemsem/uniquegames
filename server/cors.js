@@ -4,7 +4,15 @@
  * CORS_ORIGINS: comma-separated list of allowed origins.
  * Empty / unset → allow any origin (Access-Control-Allow-Origin: *).
  * Example: https://my-app.netlify.app,http://localhost:5173
+ *
+ * Trailing slashes are ignored — browsers never send Origin with a trailing `/`.
  */
+
+function normalizeOrigin(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\/+$/, '')
+}
 
 export function parseCorsOrigins(env = process.env) {
   const raw = String(env.CORS_ORIGINS ?? '').trim()
@@ -13,7 +21,7 @@ export function parseCorsOrigins(env = process.env) {
   }
   return raw
     .split(',')
-    .map((value) => value.trim())
+    .map((value) => normalizeOrigin(value))
     .filter(Boolean)
 }
 
@@ -22,7 +30,7 @@ export function resolveCorsOrigin(requestOrigin, allowedOrigins) {
   if (origins.includes('*')) {
     return '*'
   }
-  const origin = String(requestOrigin || '').trim()
+  const origin = normalizeOrigin(requestOrigin)
   if (origin && origins.includes(origin)) {
     return origin
   }
