@@ -16,7 +16,7 @@
     "test": "node --test server src/world src/assets src/api src/interaction"
   },
   "engines": {
-    "node": ">=20"
+    "node": "20.x"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.6",
