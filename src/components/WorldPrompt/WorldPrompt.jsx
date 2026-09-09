@@ -134,6 +134,14 @@ export function WorldPrompt() {
             {world.message || 'Building your world...'}
           </p>
         ) : null}
+        {busy && (world.pendingRooms?.length ?? 0) > 0 ? (
+          <p className="status-loading world-prompt-pending" aria-live="polite">
+            Still rendering {world.pendingRooms.map((room) => room.name).join(', ')}
+            {world.totalRoomCount
+              ? ` · ${world.readyRoomCount}/${world.totalRoomCount} rooms ready`
+              : ''}
+          </p>
+        ) : null}
         {world.status === 'ready' && world.message ? <p className="hint">{world.message}</p> : null}
         {world.status === 'error' && world.error ? (
           <p className="status-off">

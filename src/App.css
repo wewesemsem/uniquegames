@@ -180,6 +180,84 @@
   color: #e8ffb5;
 }
 
+.env-nav-item.is-pending,
+.env-nav-item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.env-nav-item.is-pending:hover,
+.env-nav-item:disabled:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.env-nav-pending {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #d8f59a;
+  letter-spacing: 0.02em;
+}
+
+.room-progress-banner {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(12, 16, 24, 0.82);
+  border: 1px solid rgba(216, 245, 154, 0.28);
+  backdrop-filter: blur(10px);
+  color: #f4f6fb;
+  pointer-events: none;
+}
+
+.room-progress-spinner {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border: 2px solid rgba(216, 245, 154, 0.25);
+  border-top-color: #d8f59a;
+  border-radius: 50%;
+  animation: room-progress-spin 0.85s linear infinite;
+}
+
+.room-progress-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.room-progress-copy strong {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #e8ffb5;
+}
+
+.room-progress-copy span {
+  font-size: 0.72rem;
+  color: rgba(244, 246, 251, 0.72);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes room-progress-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .reticle {
   position: absolute;
   left: 50%;
@@ -252,6 +330,11 @@
   align-items: center;
   gap: 6px;
   margin-left: auto;
+}
+
+.world-prompt-pending {
+  margin: 6px 0 0;
+  font-size: 0.8rem !important;
 }
 
 .world-prompt-image-warn {

@@ -112,6 +112,14 @@ function createEnvironmentStore() {
       return
     }
 
+    if (env.pending) {
+      emit({
+        error: `${env.name ?? id} is still rendering.`,
+        status: snapshot.current ? snapshot.status : 'error',
+      })
+      return
+    }
+
     if (snapshot.transitioning) {
       pendingId = id
       return
@@ -129,33 +137,53 @@ function createEnvironmentStore() {
     return Boolean(env?.procedural || env?.panorama || (env?.objects?.length ?? 0) > 0)
   }
 
+  function pendingStub(env) {
+    return {
+      id: env.id,
+      name: env.name,
+      hotspots: env.hotspots ?? [],
+      pending: true,
+      panorama: null,
+      procedural: null,
+      objects: [],
+    }
+  }
+
   function mergeRoom(previous, next) {
     if (!next) {
       return previous
     }
+    // Explicit pending stubs must win — otherwise old catalog panoramas keep
+    // room2/room3 looking "ready" while AI images are still painting.
+    if (next.pending) {
+      return pendingStub(next)
+    }
     // Keep an already-ready room when a later partial build only has a name stub.
     // Stops room2/3 from being blanked while room1 is revealed first.
-    if (previous && roomHasContent(previous) && !roomHasContent(next)) {
+    if (previous && !previous.pending && roomHasContent(previous) && !roomHasContent(next)) {
       return {
         ...previous,
         name: next.name ?? previous.name,
         hotspots: next.hotspots ?? previous.hotspots,
+        pending: false,
       }
     }
-    return { ...previous, ...next }
+    return { ...previous, ...next, pending: false }
   }
 
-  function applyWorldMap(map) {
+  function applyWorldMap(map, { resetGenerated = false } = {}) {
     // Keep the playground room frozen; only replace generated rooms (room1–room3).
-    const next = {
-      ...worldMap,
-      playground: structuredClone(environments.playground),
-    }
+    const next = resetGenerated
+      ? { playground: structuredClone(environments.playground) }
+      : {
+          ...worldMap,
+          playground: structuredClone(environments.playground),
+        }
     for (const [id, env] of Object.entries(map ?? {})) {
       if (id === 'playground') {
         continue
       }
-      next[id] = mergeRoom(next[id], env)
+      next[id] = mergeRoom(resetGenerated ? null : next[id], env)
     }
     worldMap = next
   }
@@ -182,9 +210,9 @@ function createEnvironmentStore() {
     }
 
     pendingId = null
-    // Apply immediately so later patchWorld(room2/room3) merges aren't wiped when
-    // the fade-out callback would otherwise re-apply a stale first-room-only map.
-    applyWorldMap(map)
+    // Drop prior catalog/generated rooms so pending stubs are not merged with
+    // leftover panoramas from the static room1–room3 catalog.
+    applyWorldMap(map, { resetGenerated: true })
     emit({ transitioning: true, error: null })
 
     const go = () => beginLoad(startId)

@@ -3,7 +3,7 @@ import { ApiError } from '../api/worldApi.js'
 import { assetResolver } from '../assets/AssetResolver.js'
 import { environmentStore } from '../navigation/EnvironmentManager.jsx'
 import { directWorld } from './WorldDirector.js'
-import { buildWorld } from './WorldBuilder.js'
+import { buildWorld, ensureThreeRooms } from './WorldBuilder.js'
 import { parseWorldSpecification } from './WorldSpecification.js'
 
 const idleSnapshot = {
@@ -20,6 +20,9 @@ const idleSnapshot = {
   error: null,
   retryAfter: null,
   retryUntil: null,
+  pendingRooms: [],
+  readyRoomCount: 0,
+  totalRoomCount: 0,
 }
 
 const IN_FLIGHT = new Set(['submitting', 'processing', 'resolving', 'generating', 'loading'])
@@ -65,6 +68,10 @@ function readyMessage(rooms, generation, environmentMode) {
 
   if (environmentMode === 'IMAGE_GENERATION' || generatedCount > 0) {
     if (generatedCount) {
+      const total = rooms.length
+      if (generatedCount < total && panoramaFallbacks) {
+        return `World ready. Loaded ${generatedCount} of ${total} generated 360° skies; other rooms used placeholders.`
+      }
       return `World ready. Loaded ${generatedCount} generated 360° environment${generatedCount === 1 ? '' : 's'}.`
     }
     if (panoramaFallbacks || generation?.missing) {
@@ -135,6 +142,15 @@ function createWorldStore() {
     }, 4200)
   }
 
+  function pendingFromSpec(specification, readyIds) {
+    if (!specification?.rooms?.length) {
+      return []
+    }
+    return ensureThreeRooms(specification)
+      .filter((room) => room?.id && !readyIds.has(room.id))
+      .map((room) => ({ id: room.id, name: room.name || room.id }))
+  }
+
   function revealRooms(specification, rooms) {
     const readyIds = new Set((rooms ?? []).map((room) => room?.spec?.id).filter(Boolean))
     const built = buildWorld(specification, { rooms })
@@ -143,9 +159,26 @@ function createWorldStore() {
     const environments = {}
     for (const [id, env] of Object.entries(built.environments)) {
       environments[id] = readyIds.has(id)
-        ? env
-        : { id: env.id, name: env.name, hotspots: env.hotspots }
+        ? { ...env, pending: false }
+        : {
+            id: env.id,
+            name: env.name,
+            hotspots: env.hotspots,
+            pending: true,
+            panorama: null,
+            procedural: null,
+            objects: [],
+          }
     }
+
+    const pendingRooms = pendingFromSpec(specification, readyIds)
+    emit({
+      pendingRooms,
+      readyRoomCount: readyIds.size,
+      totalRoomCount: specification?.rooms?.length
+        ? ensureThreeRooms(specification).length
+        : pendingRooms.length + readyIds.size,
+    })
 
     if (snapshot.status === 'generating' || snapshot.status === 'ready') {
       environmentStore.patchWorld(environments)
@@ -184,6 +217,9 @@ function createWorldStore() {
       retryAfter: null,
       retryUntil: null,
       models: { ...(snapshot.models ?? {}), environmentMode },
+      pendingRooms: [],
+      readyRoomCount: 0,
+      totalRoomCount: 0,
     })
     startBeats(beats)
 
@@ -222,10 +258,34 @@ function createWorldStore() {
             revealRooms(specification, readyRooms)
             if (!revealed) {
               revealed = true
-              startBeats(MORE_BEATS)
+              const pending = pendingFromSpec(specification, new Set(readyRooms.map((r) => r.spec?.id).filter(Boolean)))
+              const pendingLabel =
+                pending.length === 0
+                  ? MORE_BEATS[0]
+                  : pending.length === 1
+                    ? `You're in. Still painting ${pending[0].name}…`
+                    : `You're in. Still painting ${pending.length} more rooms…`
+              startBeats([pendingLabel, ...MORE_BEATS.slice(1)])
               emit({
                 status: 'generating',
-                message: MORE_BEATS[0],
+                message: pendingLabel,
+                pendingRooms: pending,
+                readyRoomCount: readyRooms.length,
+                totalRoomCount: specification.rooms.length,
+              })
+            } else {
+              const pending = pendingFromSpec(specification, new Set(readyRooms.map((r) => r.spec?.id).filter(Boolean)))
+              const pendingLabel =
+                pending.length === 0
+                  ? 'Almost done…'
+                  : pending.length === 1
+                    ? `Still painting ${pending[0].name} in the background…`
+                    : `Still painting ${pending.map((r) => r.name).join(' & ')} in the background…`
+              emit({
+                message: pendingLabel,
+                pendingRooms: pending,
+                readyRoomCount: readyRooms.length,
+                totalRoomCount: specification.rooms.length,
               })
             }
           }
@@ -287,6 +347,9 @@ function createWorldStore() {
         error: null,
         generation: directed.generation ?? snapshot.generation,
         models: directed.models ?? snapshot.models,
+        pendingRooms: [],
+        readyRoomCount: resolved.rooms?.length ?? snapshot.totalRoomCount,
+        totalRoomCount: resolved.rooms?.length ?? snapshot.totalRoomCount,
       })
     } catch (error) {
       if (token !== requestToken) {
@@ -300,6 +363,7 @@ function createWorldStore() {
           error: 'That took too long. Please try again.',
           retryAfter: null,
           retryUntil: null,
+          pendingRooms: [],
         })
         return
       }
@@ -315,6 +379,7 @@ function createWorldStore() {
               : 'Could not build that world.',
         retryAfter,
         retryUntil: retryAfter ? Date.now() + retryAfter * 1000 : null,
+        pendingRooms: [],
       })
     } finally {
       if (token === requestToken) {

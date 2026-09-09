@@ -17,7 +17,7 @@ import { environmentStore, navigateTo, useEnvironment } from '../navigation/Envi
  *   + scene-aware interactions → procedural reactions
  */
 export function Environment() {
-  const { current, currentId } = useEnvironment()
+  const { current, currentId, rooms } = useEnvironment()
   const isPlayground = currentId === 'playground'
   // AI image panoramas win over procedural skies when both exist (HQ / AI images mode).
   const hasPanorama = Boolean(current?.panorama) && !isPlayground
@@ -90,15 +90,23 @@ export function Environment() {
       {objects.map((object, index) => (
         <SceneObject key={object.id ?? `${object.type}-${index}`} {...object} />
       ))}
-      {(current.hotspots ?? []).map((hotspot) => (
-        <Hotspot
-          key={hotspot.id}
-          id={hotspot.id}
-          position={hotspot.position}
-          label={hotspot.label}
-          onSelect={() => navigateTo(hotspot.target)}
-        />
-      ))}
+      {(current.hotspots ?? []).map((hotspot) => {
+        const target = rooms.find((room) => room.id === hotspot.target)
+        const targetPending = Boolean(target?.pending)
+        return (
+          <Hotspot
+            key={hotspot.id}
+            id={hotspot.id}
+            position={hotspot.position}
+            label={targetPending ? `${hotspot.label} (rendering…)` : hotspot.label}
+            onSelect={() => {
+              if (!targetPending) {
+                navigateTo(hotspot.target)
+              }
+            }}
+          />
+        )
+      })}
     </>
   )
 }
