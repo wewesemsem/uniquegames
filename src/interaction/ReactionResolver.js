@@ -5,26 +5,16 @@
  */
 
 import { resolveProceduralObject } from '../procedural/objects/ObjectResolver.js'
+import { playerPose } from '../navigation/playerPose.js'
 
 /** Known subjects → semantic object needs (safe structured data only). */
 const SUBJECT_PRESETS = {
   mummy: {
-    type: 'generic',
+    type: 'statue',
     description: 'Ancient mummy',
     tags: ['mummy', 'creature', 'undead'],
     category: 'creature',
-    form: 'organic',
-    appearance: {
-      scale_hint: 'medium',
-      color: 'earthy',
-      surface: 'rough',
-      emission: 0.05,
-      roughness: 0.9,
-      metalness: 0,
-      transparency: 0,
-    },
-    geometry: { primary_form: 'organic', facets: 6, height: 1.8, width: 0.7 },
-    behavior: { floating: false, clustered: false, count: 1 },
+    material: 'sandstone',
   },
   whale: {
     type: 'fish',
@@ -178,6 +168,37 @@ export function resolveSubjectNeed(subject, reaction = {}) {
 }
 
 /**
+ * Place spawns in front of the source, toward the player, clear of large landmarks.
+ */
+export function dramaticSpawnOffset(sourceObject = null, reaction = {}) {
+  const scale = sourceObject?.scale
+  const sx = Array.isArray(scale) ? Math.max(Number(scale[0]) || 1, Number(scale[2]) || 1) : Number(scale) || 1
+  const clearance = Math.max(3.2, sx * 0.75 + 2.2)
+  const origin = sourceObject?.position ?? [0, 0, -4]
+
+  const towardX = playerPose.x - (origin[0] ?? 0)
+  const towardZ = playerPose.z - (origin[2] ?? 0)
+  const towardLen = Math.hypot(towardX, towardZ) || 1
+  const preferX = towardX / towardLen
+  const preferZ = towardZ / towardLen
+
+  if (Array.isArray(reaction.offset) && reaction.offset.length >= 3) {
+    const ox = Number(reaction.offset[0]) || 0
+    const oy = Number(reaction.offset[1]) || 0
+    const oz = Number(reaction.offset[2]) || 0
+    const horiz = Math.hypot(ox, oz)
+    if (horiz >= clearance * 0.85) {
+      return [ox, Math.max(oy, 0), oz]
+    }
+    const dirX = horiz > 0.05 ? ox / horiz : preferX
+    const dirZ = horiz > 0.05 ? oz / horiz : preferZ
+    return [dirX * clearance, Math.max(oy, 0), dirZ * clearance]
+  }
+
+  return [preferX * clearance, 0.15, preferZ * clearance]
+}
+
+/**
  * Build one or more spawn descriptors for a reaction event.
  */
 export function resolveReactionSpawns(event, sourceObject = null, now = 0) {
@@ -198,8 +219,10 @@ export function resolveReactionSpawns(event, sourceObject = null, now = 0) {
   const need = resolveSubjectNeed(reaction.subject || sourceObject?.type, reaction)
   const resolved = resolveProceduralObject(need)
   const count = Math.min(12, Math.max(1, reaction.count || 1))
-  const baseScale = reaction.scale ?? (need.params?.size === 'large' ? 2.2 : 1)
-  const offset = reaction.offset ?? [0, 0, 1.5]
+  const dramaticDefault =
+    reaction.type === 'creature_appearance' ? 2.5 : reaction.type === 'animal_appearance' ? 1.6 : 1.2
+  const baseScale = reaction.scale ?? (need.params?.size === 'large' ? 2.2 : dramaticDefault)
+  const offset = dramaticSpawnOffset(sourceObject, reaction)
   const origin = sourceObject?.position ?? [0, 0, -4]
 
   const spawns = []
@@ -221,7 +244,7 @@ export function resolveReactionSpawns(event, sourceObject = null, now = 0) {
       kind: 'procedural',
       position,
       scale,
-      rotation: [0, Math.atan2(offset[0] || 0.01, offset[2] || 0.01), 0],
+      rotation: [0, Math.atan2(playerPose.x - position[0], playerPose.z - position[2]), 0],
       detail: 'medium',
       params: resolved.descriptor
         ? { ...(need.params ?? {}), descriptor: resolved.descriptor }
@@ -229,10 +252,12 @@ export function resolveReactionSpawns(event, sourceObject = null, now = 0) {
       tags: need.tags,
       category: need.category || resolved.descriptor?.category,
       form: need.form || resolved.descriptor?.form,
+      material: need.material,
       animation: reaction.animation,
       duration: reaction.duration ?? 4,
       startedAt: now,
       temporary: true,
+      origin: origin.slice(),
     })
   }
   return spawns
@@ -256,7 +281,7 @@ export function reactionLighting(reaction) {
   if (!reaction) return null
   if (reaction.type === 'change_lighting' || reaction.type === 'glow' || reaction.lighting) {
     return {
-      intensity: reaction.lighting?.intensity ?? (reaction.type === 'glow' ? 1.4 : 1.2),
+      intensity: reaction.lighting?.intensity ?? (reaction.type === 'glow' ? 2.6 : 2.2),
       color: reaction.lighting?.color ?? '#ffc978',
     }
   }

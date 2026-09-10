@@ -23,6 +23,7 @@ export function createSceneEventStore() {
     lighting: null,
     particles: null,
     sound: null,
+    origin: null,
     objectFx: new Map(), // objectId → { animation, until, emissive }
   }
   let roomId = null
@@ -42,6 +43,7 @@ export function createSceneEventStore() {
         lighting: effects.lighting,
         particles: effects.particles,
         sound: effects.sound,
+        origin: effects.origin,
         objectFx: Object.fromEntries(effects.objectFx),
       },
       events: [...events.values()].map((e) => ({
@@ -69,7 +71,7 @@ export function createSceneEventStore() {
   function resetRoom(nextRoomId, interactions, objects = []) {
     // Cleanup previous temporary spawns
     spawns = []
-    effects = { lighting: null, particles: null, sound: null, objectFx: new Map() }
+    effects = { lighting: null, particles: null, sound: null, origin: null, objectFx: new Map() }
     events = new Map()
     objectIndex = new Map()
     targetIndex = new Map()
@@ -162,11 +164,21 @@ export function createSceneEventStore() {
     }
 
     // Effects
-    const lighting = reactionLighting(reaction)
+    const source = entry.sourceObject || sourceObject
+    const origin = Array.isArray(source?.position) ? source.position.slice() : [0, 0, -3]
+    effects.origin = origin
+
+    let lighting = reactionLighting(reaction)
+    if (!lighting && reactionNeedsSpawn(reaction)) {
+      lighting = { intensity: 2.8, color: '#ffc978' }
+    }
     if (lighting) {
       effects.lighting = { ...lighting, until: entry.completesAt }
     }
-    const particles = reactionParticles(reaction)
+    let particles = reactionParticles(reaction)
+    if (!particles && reactionNeedsSpawn(reaction)) {
+      particles = 'dust'
+    }
     if (particles) {
       effects.particles = { kind: particles, until: entry.completesAt }
     }
@@ -178,8 +190,11 @@ export function createSceneEventStore() {
     if (reactionNeedsSpawn(reaction)) {
       const existing = spawns.filter((s) => s.eventId === eventId && now < s.startedAt + s.duration * 1000)
       if (existing.length === 0) {
-        const fresh = resolveReactionSpawns(entry.spec, entry.sourceObject || sourceObject, now)
+        const fresh = resolveReactionSpawns(entry.spec, source, now)
         spawns = [...spawns, ...fresh]
+        if (fresh[0]?.position) {
+          effects.origin = fresh[0].position.slice()
+        }
       }
     } else if (entry.sourceObjectId || sourceObject?.id) {
       // In-place feedback for glow / flee / bloom / activate on the source mesh

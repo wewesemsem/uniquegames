@@ -50,6 +50,17 @@ export function reactionMotion(animation, progress, seed = 1) {
         emissive: 0,
       }
     }
+    case 'chase_player':
+    case 'approach_player': {
+      return {
+        position: [0, Math.abs(Math.sin(p * Math.PI * 8)) * 0.1, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        opacity: 1,
+        emissive: 0.2 + ease * 0.25,
+        chase: animation === 'chase_player' ? 3.4 : 1.7,
+      }
+    }
     case 'float_in':
     case 'orbit_in': {
       const r = (1 - ease) * 4
@@ -96,10 +107,10 @@ export function reactionMotion(animation, progress, seed = 1) {
       const pulse = 0.5 + Math.sin(p * Math.PI * 4) * 0.5
       return {
         position: [0, 0, 0],
-        rotation: [0, ease * 0.2, 0],
-        scale: [1 + pulse * 0.06, 1 + pulse * 0.06, 1 + pulse * 0.06],
+        rotation: [0, ease * 0.35, 0],
+        scale: [1 + pulse * 0.16, 1 + pulse * 0.16, 1 + pulse * 0.16],
         opacity: 1,
-        emissive: 0.2 + ease * 0.7 * pulse,
+        emissive: 0.35 + ease * 0.85 * pulse,
       }
     }
     case 'burst': {

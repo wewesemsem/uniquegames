@@ -101,11 +101,13 @@ Schema:
             "reaction": {
               "type": "creature_appearance|animal_appearance|spawn|reveal|open|glow|change_lighting|particles|swim|fly|emerge|…",
               "subject": "mummy|whale|butterfly|bird|…",
-              "animation": "emerge_from_door|swim_into_scene|fly_in|open|glow_up|appear|…",
-              "duration": 4,
+              "animation": "chase_player|emerge_from_door|swim_into_scene|fly_in|open|glow_up|appear|…",
+              "duration": 8,
               "once": true,
               "count": 1,
-              "offset": [0, 0, 2]
+              "scale": 2.4,
+              "particles": "dust",
+              "lighting": { "intensity": 2.8, "color": "#ffb347" }
             }
           }
         ]
@@ -147,8 +149,8 @@ Rules:
 - ALWAYS include animation unless the user explicitly asks for a static/frozen scene (then set static_scene true).
 - Animation describes behaviors, not JavaScript. Architecture (pyramids, temples) may stay still while sand, birds, torches, particles, and atmosphere move.
 - Underwater must animate fish (swim/schooling), seaweed (sway), bubbles (rise). Meadow: flowers sway, pollen drifts, birds fly. Egypt: sand/dust drifts, palms sway, torches flicker.
-- Include interactions.events with a few meaningful scene reactions when appropriate (never executable code).
-  Examples: Egypt pyramid click → mummy emerge_from_door; coral click → whale swim_into_scene; flower click → butterflies fly_in; torch proximity → change_lighting; spaceship approach → glow/activate.
+- Include interactions.events with dramatic click reactions for landmarks (never executable code). Prefer creature_appearance / animal_appearance / spawn with a visible subject over glow-only.
+  Examples: Egypt pyramid click → mummy chase_player; coral click → whale swim_into_scene; flower click → butterflies fly_in; torch proximity → change_lighting; spaceship click → asteroid spawn.
 - Interactions are structured data only: trigger + target + reaction. The app owns event handling and procedural spawning.
 - Prefer specialized types when they exist (pyramid, fish, flower, tree, spaceship, …).
 - For UNKNOWN concepts (mushroom, crystal city, alien flora, floating temples): use type "generic" OR a free-form type plus category/form/appearance/geometry/behavior. The engine builds primitives from those safe params.

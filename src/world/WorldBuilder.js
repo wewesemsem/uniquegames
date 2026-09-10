@@ -153,8 +153,6 @@ function autoHotspots(roomIds, index) {
 
 function buildObjects(roomId, resolvedObjects, animation = null, interactions = null) {
   const used = new Set()
-  // Prefer one interactive instance per target selector (first match wins highlight).
-  const claimedTargets = new Set()
 
   return resolvedObjects.slice(0, MAX_SCENE_OBJECTS).map((entry, index) => {
     const need = entry.need ?? entry
@@ -185,18 +183,10 @@ function buildObjects(roomId, resolvedObjects, animation = null, interactions = 
 
     const matched = matchObjectInteractions(object, interactions)
     if (matched.length) {
-      // Attach events whose target hasn't already been claimed by another object,
-      // except multi-target soft events (glow/flee) which can bind to several.
-      const bound = []
-      for (const event of matched) {
-        const exclusive = ['click', 'tap', 'vr_select', 'gaze', 'multi_interact'].includes(event.trigger)
-        const claimKey = `${event.target}:${event.trigger}:${event.reaction?.type}`
-        if (exclusive && claimedTargets.has(claimKey)) continue
-        if (exclusive) claimedTargets.add(claimKey)
-        bound.push(event)
-      }
-      object.interactions = bound
-      object.interactive = objectIsInteractive(object, { events: bound }) || bound.length > 0
+      // Bind every matching landmark so each interactive prop is discoverable.
+      // once:true on the shared event still gates the reaction itself.
+      object.interactions = matched
+      object.interactive = objectIsInteractive(object, { events: matched }) || matched.length > 0
     } else if (index === 0 && (type === 'box' || type === 'sphere' || type === 'crate')) {
       object.interactive = true
     }

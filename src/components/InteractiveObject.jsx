@@ -68,13 +68,13 @@ export function InteractiveObject({
       onPointerOver={handlePointerOver}
       onPointerOut={handlePointerOut}
       pointerEventsType={{ deny: 'grab' }}
-      scale={highlighted ? 1.08 : 1}
+      scale={highlighted ? 1.16 : 1}
     >
       {type === 'sphere' ? <sphereGeometry args={[0.45, 28, 28]} /> : <boxGeometry args={[0.9, 0.9, 0.9]} />}
       <meshStandardMaterial
         color={active ? activeColor : restColor}
-        emissive={highlighted ? '#ffffff' : '#000000'}
-        emissiveIntensity={highlighted ? 0.18 : 0}
+        emissive={highlighted ? '#fff4a8' : '#000000'}
+        emissiveIntensity={highlighted ? 0.45 : 0}
       />
     </mesh>
   )

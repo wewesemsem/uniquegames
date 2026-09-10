@@ -54,6 +54,8 @@ export const REACTION_ANIMATIONS = [
   'swim_into_scene',
   'swim',
   'walk',
+  'chase_player',
+  'approach_player',
   'fly_in',
   'fly',
   'float_in',
@@ -185,7 +187,7 @@ export function sanitizeReaction(raw) {
 }
 
 function defaultAnimationFor(type) {
-  if (type === 'emerge' || type === 'creature_appearance') return 'emerge_from_door'
+  if (type === 'emerge' || type === 'creature_appearance') return 'chase_player'
   if (type === 'swim' || type === 'animal_appearance') return 'swim_into_scene'
   if (type === 'fly') return 'fly_in'
   if (type === 'walk') return 'walk'
@@ -263,19 +265,27 @@ export function inferInteractions(composition = {}, options = {}) {
       reaction: {
         type: 'creature_appearance',
         subject: 'mummy',
-        animation: 'emerge_from_door',
-        duration: 5,
-        offset: [0, 0, 2.2],
-        scale: 1.1,
+        animation: 'chase_player',
+        duration: 12,
+        scale: 2.6,
+        particles: 'dust',
+        lighting: { intensity: 3.2, color: '#ffb347' },
       },
     })
     add({
       id: 'statue_reveal',
       target: 'statue',
-      trigger: 'approach',
-      proximity: 3.5,
+      trigger: 'click',
       once: true,
-      reaction: { type: 'glow', subject: 'statue', animation: 'glow_up', duration: 3 },
+      reaction: {
+        type: 'spawn',
+        subject: 'artifact',
+        animation: 'appear',
+        duration: 6,
+        scale: 1.4,
+        particles: 'sparks',
+        lighting: { intensity: 2.4, color: '#ffe08a' },
+      },
     })
   }
 
@@ -313,9 +323,11 @@ export function inferInteractions(composition = {}, options = {}) {
       reaction: {
         type: 'creature_appearance',
         subject: 'mummy',
-        animation: 'emerge_from_door',
-        duration: 5,
-        offset: [0, 0, 1.5],
+        animation: 'chase_player',
+        duration: 12,
+        scale: 2.4,
+        particles: 'dust',
+        lighting: { intensity: 3, color: '#ffb347' },
       },
     })
   }
@@ -409,10 +421,17 @@ export function inferInteractions(composition = {}, options = {}) {
     add({
       id: 'ship_activate',
       target: 'spaceship',
-      trigger: 'approach',
-      proximity: 5,
+      trigger: 'click',
       once: true,
-      reaction: { type: 'glow', subject: 'spaceship', animation: 'activate', duration: 4, particles: 'sparks' },
+      reaction: {
+        type: 'spawn',
+        subject: 'asteroid',
+        animation: 'orbit_in',
+        duration: 8,
+        scale: 1.4,
+        particles: 'sparks',
+        lighting: { intensity: 2.8, color: '#7ec8ff' },
+      },
     })
     add({
       id: 'planet_reveal',
@@ -456,9 +475,10 @@ export function inferInteractions(composition = {}, options = {}) {
         type: 'spawn',
         subject: 'crystal',
         animation: 'appear',
-        duration: 5,
-        offset: [0, 1.5, 0],
-        scale: 0.8,
+        duration: 6,
+        scale: 1.8,
+        particles: 'sparks',
+        lighting: { intensity: 2.6, color: '#a8e0ff' },
       },
     })
   }

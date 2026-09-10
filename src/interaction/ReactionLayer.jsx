@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { getGenerator } from '../procedural/objects/generators.js'
 import { hashInt } from '../procedural/objects/hash.js'
 import { reactionMotion } from '../procedural/animation/reactionMotion.js'
+import { playerPose } from '../navigation/playerPose.js'
 import { interactionManager } from './InteractionManager.js'
 import { sceneEventStore } from './SceneEventStore.js'
 
@@ -13,12 +14,35 @@ function ReactionSpawn({ spawn }) {
   const basePos = spawn.position || [0, 0, 0]
   const baseScale = Array.isArray(spawn.scale) ? spawn.scale : [1, 1, 1]
   const baseRot = spawn.rotation || [0, 0, 0]
+  const chasePos = useRef(basePos.slice())
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     if (!ref.current) return
     const elapsed = (performance.now() - spawn.startedAt) / 1000
     const progress = Math.min(1, elapsed / Math.max(0.1, spawn.duration || 4))
     const motion = reactionMotion(spawn.animation, progress, seed)
+
+    if (motion.chase) {
+      const cur = chasePos.current
+      const dx = playerPose.x - cur[0]
+      const dz = playerPose.z - cur[2]
+      const dist = Math.hypot(dx, dz)
+      if (dist > 1.15) {
+        const step = Math.min(dist - 1.05, motion.chase * Math.min(0.05, delta))
+        cur[0] += (dx / dist) * step
+        cur[2] += (dz / dist) * step
+      }
+      cur[1] = basePos[1] + motion.position[1]
+      ref.current.position.set(cur[0], cur[1], cur[2])
+      ref.current.rotation.set(baseRot[0], Math.atan2(dx, dz), baseRot[2])
+      ref.current.scale.set(
+        baseScale[0] * motion.scale[0],
+        baseScale[1] * motion.scale[1],
+        baseScale[2] * motion.scale[2]
+      )
+      return
+    }
+
     ref.current.position.set(
       basePos[0] + motion.position[0],
       basePos[1] + motion.position[1],
@@ -38,29 +62,48 @@ function ReactionSpawn({ spawn }) {
 
   return (
     <group ref={ref}>
-      <Generator detail={spawn.detail || 'medium'} seed={seed} params={spawn.params} color="#c4b49a" />
+      <Generator
+        detail={spawn.detail || 'medium'}
+        seed={seed}
+        params={spawn.params}
+        material={spawn.material || 'sandstone'}
+        color="#c4b49a"
+      />
     </group>
   )
 }
 
 function ReactionEffects({ effects }) {
   if (!effects?.lighting && !effects?.particles) return null
+  const origin = effects.origin || [0, 0, -3]
+  const sparkles = effects.particles
+    ? [
+        [0, 1.2, 0],
+        [0.7, 1.7, 0.4],
+        [-0.7, 1.0, -0.3],
+        [0.35, 2.1, -0.5],
+        [-0.4, 1.6, 0.6],
+        [0.9, 1.3, -0.2],
+        [-0.2, 2.4, 0.2],
+        [0.15, 0.8, 0.7],
+      ]
+    : []
   return (
-    <group>
+    <group position={origin}>
       {effects.lighting ? (
         <pointLight
-          position={[0, 2.2, -2]}
-          intensity={effects.lighting.intensity ?? 1.2}
+          position={[0, 2.4, 0]}
+          intensity={effects.lighting.intensity ?? 2.8}
           color={effects.lighting.color ?? '#ffc978'}
-          distance={18}
+          distance={28}
         />
       ) : null}
-      {effects.particles ? (
-        <mesh position={[0, 1.5, -3]} raycast={() => null}>
-          <sphereGeometry args={[0.15, 8, 8]} />
-          <meshBasicMaterial color="#fff4d0" transparent opacity={0.35} />
+      {sparkles.map((pos, index) => (
+        <mesh key={index} position={pos} raycast={() => null}>
+          <sphereGeometry args={[0.14 + (index % 3) * 0.05, 8, 8]} />
+          <meshBasicMaterial color="#fff4d0" transparent opacity={0.62 - index * 0.04} depthWrite={false} />
         </mesh>
-      ) : null}
+      ))}
     </group>
   )
 }

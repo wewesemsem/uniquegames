@@ -27,7 +27,7 @@ describe('InteractionSchema', () => {
     assert.equal(mummy.target, 'pyramid')
     assert.equal(mummy.trigger, 'click')
     assert.equal(mummy.once, true)
-    assert.equal(mummy.reaction.animation, 'emerge_from_door')
+    assert.equal(mummy.reaction.animation, 'chase_player')
   })
 
   it('infers underwater coral → whale', () => {
@@ -87,27 +87,32 @@ describe('InteractionSchema', () => {
 })
 
 describe('ReactionResolver', () => {
-  it('resolves mummy via generic procedural fallback', () => {
+  it('resolves mummy as a readable statue mesh outside large landmarks', () => {
     const need = resolveSubjectNeed('mummy')
     assert.equal(need.category, 'creature')
+    assert.equal(need.type, 'statue')
     const spawns = resolveReactionSpawns(
       {
         id: 'test',
         reaction: {
           type: 'creature_appearance',
           subject: 'mummy',
-          animation: 'emerge_from_door',
+          animation: 'chase_player',
           duration: 4,
           count: 1,
           offset: [0, 0, 2],
+          scale: 2.6,
         },
       },
-      { id: 'pyr', type: 'pyramid', position: [0, 0, -14] },
+      { id: 'pyr', type: 'pyramid', position: [0, 0, -14], scale: [5.5, 5.5, 5.5] },
       1000
     )
     assert.equal(spawns.length, 1)
-    assert.equal(spawns[0].type, 'generic')
+    assert.equal(spawns[0].type, 'statue')
     assert.ok(spawns[0].temporary)
+    const dz = Math.abs(spawns[0].position[2] - -14)
+    const dx = Math.abs(spawns[0].position[0] - 0)
+    assert.ok(Math.hypot(dx, dz) > 5, 'spawn should clear the pyramid volume')
   })
 
   it('resolves whale to fish generator', () => {
@@ -148,7 +153,7 @@ describe('SceneEventStore', () => {
     })
     assert.equal(second, false)
     assert.equal(store.getEventState('pyramid_entrance_mummy'), 'active')
-    store.tick(now + 6000)
+    store.tick(now + 13000)
     assert.equal(store.getEventState('pyramid_entrance_mummy'), 'completed')
   })
 })
@@ -157,8 +162,18 @@ describe('reactionMotion', () => {
   it('eases emerge and swim animations', () => {
     const emerge = reactionMotion('emerge_from_door', 0.5, 1)
     assert.ok(emerge.scale[1] > 0.4)
-    const swim = reactionMotion('swim_into_scene', 0, 1)
-    assert.ok(Math.abs(swim.position[0]) > 5)
+    const swim = reactionMotion('swim_into_scene', 0.2, 2)
+    assert.ok(Math.abs(swim.position[0]) > 1)
+    const swimStart = reactionMotion('swim_into_scene', 0, 1)
+    assert.ok(Math.abs(swimStart.position[0]) > 5)
+  })
+
+  it('marks chase animations for player follow', () => {
+    const chase = reactionMotion('chase_player', 0.4, 3)
+    assert.ok(chase.chase > 2)
+    const approach = reactionMotion('approach_player', 0.4, 3)
+    assert.ok(approach.chase > 0)
+    assert.ok(approach.chase < chase.chase)
   })
 })
 

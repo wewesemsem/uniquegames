@@ -9,9 +9,19 @@ export function createInteractionManager() {
   const objects = new Map()
   const raycaster = new Raycaster()
   const ndc = new Vector2(0, 0)
+  const listeners = new Set()
 
   let targetId = null
   let selectedId = null
+
+  function emit() {
+    for (const fn of listeners) fn(targetId)
+  }
+
+  function subscribe(fn) {
+    listeners.add(fn)
+    return () => listeners.delete(fn)
+  }
 
   function register(id, entry) {
     objects.set(id, entry)
@@ -21,6 +31,7 @@ export function createInteractionManager() {
     objects.delete(id)
     if (targetId === id) {
       targetId = null
+      emit()
     }
     if (selectedId === id) {
       selectedId = null
@@ -28,7 +39,9 @@ export function createInteractionManager() {
   }
 
   function setTarget(id) {
+    if (targetId === id) return
     targetId = id
+    emit()
   }
 
   function getTargetId() {
@@ -58,7 +71,10 @@ export function createInteractionManager() {
 
   function clearSelection() {
     selectedId = null
-    targetId = null
+    if (targetId != null) {
+      targetId = null
+      emit()
+    }
   }
 
   function updateFromCamera(camera) {
@@ -73,14 +89,20 @@ export function createInteractionManager() {
     }
 
     if (meshes.length === 0) {
-      targetId = null
+      if (targetId != null) {
+        targetId = null
+        emit()
+      }
       return
     }
 
     raycaster.setFromCamera(ndc, camera)
     const hits = raycaster.intersectObjects(meshes, true)
     if (hits.length === 0) {
-      targetId = null
+      if (targetId != null) {
+        targetId = null
+        emit()
+      }
       return
     }
 
@@ -90,7 +112,10 @@ export function createInteractionManager() {
       id = meshToId.get(node) ?? null
       node = node.parent
     }
-    targetId = id
+    if (targetId !== id) {
+      targetId = id
+      emit()
+    }
   }
 
   return {
@@ -103,6 +128,7 @@ export function createInteractionManager() {
     interactTarget,
     clearSelection,
     updateFromCamera,
+    subscribe,
   }
 }
 

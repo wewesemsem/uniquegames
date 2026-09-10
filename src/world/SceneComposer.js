@@ -8,6 +8,7 @@
 import { resolveRoomComposition } from './CompositionSchema.js'
 import { inferAnimation, sanitizeAnimation } from './AnimationSchema.js'
 import { inferInteractions, sanitizeInteractions } from './InteractionSchema.js'
+import { reactionNeedsSpawn } from '../interaction/ReactionResolver.js'
 import { hash01 } from '../procedural/objects/hash.js'
 
 const LIFE_COUNT = { none: 0, sparse: 1, moderate: 2, abundant: 4 }
@@ -536,6 +537,33 @@ export function compositionSceneOverlay(composition) {
 }
 
 /**
+ * Prefer dramatic spawn reactions from heuristics when the LLM only provided glow/particles.
+ */
+export function preferDramaticInteractions(llmRaw, composition, animation = {}) {
+  const heuristic = inferInteractions(composition, { static_scene: animation.static_scene })
+  const hasLlmList = Array.isArray(llmRaw) || Array.isArray(llmRaw?.events)
+  if (!hasLlmList) return heuristic
+
+  const llm = sanitizeInteractions(llmRaw)
+  if (!llm.events.length) return heuristic
+
+  const merged = llm.events.map((event) => ({ ...event, reaction: { ...event.reaction } }))
+  for (const h of heuristic.events) {
+    if (!reactionNeedsSpawn(h.reaction)) continue
+    const key = `${h.target}:${h.trigger}`
+    const existingIdx = merged.findIndex((e) => `${e.target}:${e.trigger}` === key)
+    if (existingIdx >= 0) {
+      if (!reactionNeedsSpawn(merged[existingIdx].reaction)) {
+        merged[existingIdx] = h
+      }
+    } else {
+      merged.push(h)
+    }
+  }
+  return sanitizeInteractions({ events: merged })
+}
+
+/**
  * Expand a room's composition into landmark-safe fill objects + scene overlay.
  * Landmark objects from the LLM are preserved by the caller and merged later.
  */
@@ -598,7 +626,7 @@ export function composeRoom(room, theme = '', options = {}) {
 
   const interactions =
     room.interactions?.events?.length || Array.isArray(room.interactions)
-      ? sanitizeInteractions(room.interactions)
+      ? preferDramaticInteractions(room.interactions, composition, animation)
       : inferInteractions(composition, { static_scene: animation.static_scene })
 
   return {

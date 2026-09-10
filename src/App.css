@@ -268,6 +268,39 @@
   border: 1.5px solid rgba(255, 255, 255, 0.85);
   border-radius: 50%;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  transition:
+    width 0.12s ease,
+    height 0.12s ease,
+    margin 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.reticle.is-targeting {
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border-color: #c9f07d;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.45),
+    0 0 14px rgba(201, 240, 125, 0.55);
+}
+
+.interact-hint {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 28px);
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(12, 14, 22, 0.72);
+  border: 1px solid rgba(201, 240, 125, 0.35);
+  color: #e8ffb5;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 .world-prompt {
@@ -286,6 +319,52 @@
   background: rgba(12, 14, 22, 0.78);
   border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(8px);
+}
+
+.world-prompt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.world-prompt-header .kicker {
+  margin: 0;
+}
+
+.world-prompt:not(.is-collapsed) .world-prompt-header {
+  margin-bottom: 4px;
+}
+
+.world-prompt-collapse {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(8, 10, 16, 0.55);
+  color: rgba(244, 246, 251, 0.85);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.world-prompt-collapse:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.world-prompt-collapse:focus-visible {
+  outline: 1px solid rgba(201, 240, 125, 0.7);
+}
+
+.world-prompt-collapsed-status {
+  margin: 6px 0 0;
+  font-size: 0.78rem !important;
 }
 
 .world-prompt-card h2 {
@@ -315,6 +394,62 @@
 
 .world-prompt-card textarea:disabled {
   opacity: 0.7;
+}
+
+.world-prompt-music {
+  margin: 0 0 10px;
+}
+
+.world-prompt-music label {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 0.8rem;
+  font-weight: 550;
+  color: rgba(244, 246, 251, 0.82);
+}
+
+.world-prompt-music-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.world-prompt-music input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(8, 10, 16, 0.72);
+  color: inherit;
+  font: inherit;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.world-prompt-music input:focus {
+  outline: 1px solid rgba(201, 240, 125, 0.7);
+}
+
+.world-prompt-music input:disabled {
+  opacity: 0.7;
+}
+
+.music-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  width: 38px;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.music-toggle-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
 .world-prompt-actions {
