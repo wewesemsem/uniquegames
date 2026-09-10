@@ -42,6 +42,20 @@
   margin: 0;
 }
 
+.brand-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.brand-mark {
+  width: 14px;
+  height: 14px;
+  display: block;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
 .overlay-card h1 {
   margin: 0;
   font-size: 0.98rem;

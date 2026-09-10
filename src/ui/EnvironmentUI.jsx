@@ -70,7 +70,10 @@ export function EnvironmentUI({ store }) {
     <div className={open ? 'overlay-card is-open' : 'overlay-card is-collapsed'}>
       <div className="overlay-header">
         <div className="overlay-title">
-          <p className="kicker">3D Web + VR Demo</p>
+          <p className="kicker brand-kicker">
+            <img className="brand-mark" src="/favicon.svg" alt="" width="16" height="16" />
+            3D World Games
+          </p>
           <h1>{current?.name ?? 'Unknown environment'}</h1>
         </div>
         <button

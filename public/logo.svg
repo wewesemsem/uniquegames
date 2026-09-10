@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 96" role="img" aria-label="3D World Games">
+  <rect x="4" y="12" width="72" height="72" rx="16" fill="#0c0e16"/>
+  <circle cx="40" cy="50" r="20" fill="none" stroke="#9be7ff" stroke-width="3.5"/>
+  <path
+    d="M54 36c-3.4-5.2-9.4-8.6-16-8.6-10.9 0-19.8 8.9-19.8 19.8 0 6.5 3.2 12.3 8.2 15.9"
+    fill="none"
+    stroke="#c9f07d"
+    stroke-width="5"
+    stroke-linecap="round"
+  />
+  <path d="M49 22 L52.4 27.4 L57.8 30.8 L52.4 34.2 L49 39.6 L45.6 34.2 L40.2 30.8 L45.6 27.4 Z" fill="#c9f07d"/>
+  <text
+    x="96"
+    y="58"
+    fill="#f4f6fb"
+    font-family="ui-rounded, 'Trebuchet MS', 'Segoe UI', sans-serif"
+    font-size="34"
+    font-weight="700"
+    letter-spacing="0.4"
+  >3D World Games</text>
+</svg>
