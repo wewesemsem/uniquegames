@@ -7,6 +7,7 @@ import { createExternalAssetProvider } from '../src/assets/ExternalAssetProvider
 import { createGeneratedAssetProvider } from '../src/assets/GeneratedAssetProvider.js'
 import { heuristicWorldFromPrompt } from '../src/world/heuristicDirector.js'
 import { ensureThreeRooms } from '../src/world/WorldBuilder.js'
+import { hashSeed } from '../src/world/StyleIntent.js'
 import {
   assertWorldSizeLimits,
   createWorldSpecificationSchema,
@@ -95,7 +96,7 @@ Schema:
             "id": "pyramid_entrance_mummy",
             "target": "pyramid|coral|flower|torch|spaceship|…",
             "trigger": "click|tap|vr_select|gaze|proximity|approach|enter_room|timed|after_event|multi_interact",
-            "once": true,
+            "once": false,
             "proximity": 4,
             "gaze_duration": 1.2,
             "reaction": {
@@ -103,7 +104,6 @@ Schema:
               "subject": "mummy|whale|butterfly|bird|…",
               "animation": "chase_player|emerge_from_door|swim_into_scene|fly_in|open|glow_up|appear|…",
               "duration": 8,
-              "once": true,
               "count": 1,
               "scale": 2.4,
               "particles": "dust",
@@ -151,15 +151,19 @@ Rules:
 - Underwater must animate fish (swim/schooling), seaweed (sway), bubbles (rise). Meadow: flowers sway, pollen drifts, birds fly. Egypt: sand/dust drifts, palms sway, torches flicker.
 - Include interactions.events with dramatic click reactions for landmarks (never executable code). Prefer creature_appearance / animal_appearance / spawn with a visible subject over glow-only.
   Examples: Egypt pyramid click → mummy chase_player; coral click → whale swim_into_scene; flower click → butterflies fly_in; torch proximity → change_lighting; spaceship click → asteroid spawn.
+- Click / tap / vr_select reactions should use once:false so they can replay after the previous reaction finishes. Use once:true only for enter_room or intentionally one-shot story beats.
 - Interactions are structured data only: trigger + target + reaction. The app owns event handling and procedural spawning.
-- Prefer specialized types when they exist (pyramid, fish, flower, tree, spaceship, …).
+- Prefer specialized types when they clearly match (pyramid, fish, flower, tree, spaceship, …). For exotic / invented concepts, use type "generic" with varied form / appearance / geometry — do not force everything onto tree/rock/flower.
+- Match landmark APPEARANCE to prompt adjectives: rainbow / colorful / neon / glowing / golden → set appearance.color (vivid|bioluminescent|warm|cool), appearance.hue (0–360), and emission when glowing. Specialized meshes (pyramid, temple, obelisk) honor these appearance cues.
 - Specialized type "temple" and biome "temple_court" are Ancient Egypt ONLY (limestone colonnade, obelisks, pharaoh courts). Use them only when the prompt is Egyptian / pyramid / pharaoh / Nile.
 - Non-Egyptian temples and shrines (Japan, Shinto, pagoda, Greek, Maya, Hindu, etc.): biome generic|forest|meadow|urban, large_features "temples", motif naming the culture (e.g. "japanese shrine courtyard"), and objects with type "generic", category "structure" — never type "temple".
 - For UNKNOWN concepts (mushroom, crystal city, alien flora, floating temples): use type "generic" OR a free-form type plus category/form/appearance/geometry/behavior. The engine builds primitives from those safe params.
+- Alien / exotic worlds: vary motif and forms across rooms (spires, crystals, blobs, rings, organic flora). ONLY use fungal/mushroom motifs when the user asks for mushrooms/fungi — never default every alien scene to mushrooms.
+- Example rainbow egypt: biome desert_plateau, large_features pyramids, motif "rainbow pyramids", pyramid landmarks with appearance.color "vivid" and distinct hues.
 - Example alien mushroom forest: biome alien, vegetation fungal, atmosphere bioluminescent, motif "giant glowing mushrooms", plus a few landmark generic mushrooms with emission.
 - Example floating crystal city: biome alien, large_features crystals, motif "floating crystal city", objects with category floating_structure, form crystalline, behavior.floating true.
 - Example Japan shrine: biome forest or generic, large_features temples, motif "japanese shrine courtyard", generic structure landmarks — not Egyptian temple_court.
-- objects[] is mainly 0–6 landmarks. Do NOT list every prop — composition + composer fill the world.
+- objects[] is mainly 3–6 landmarks. Do NOT list every prop — composition + composer fill the world.
 - Scale 0.2–16. No URLs, paths, code, or extra keys.
 - At most ${limits.maxHotspotsPerRoom} hotspots per room; connect rooms with existing targetRoom ids.
 - Keep strings short.`
@@ -176,7 +180,7 @@ async function completeChat({ apiKey, baseUrl, model, messages, timeoutMs }) {
       },
       body: JSON.stringify({
         model,
-        temperature: 0.4,
+        temperature: 0.75,
         messages,
       }),
     },
@@ -201,6 +205,19 @@ function normalizeSpecification(raw, schema, limits) {
   assertWorldSizeLimits(parsed, limits)
   const rooms = ensureThreeRooms(parsed).slice(0, limits.maxRooms)
   return parseWorldSpecification({ ...parsed, rooms }, schema, limits)
+}
+
+function attachPromptMeta(specification, prompt, requestId) {
+  const text = String(prompt ?? '').trim()
+  const entropy = requestId || specification?.entropy || `${Date.now()}`
+  const seed =
+    typeof specification?.seed === 'number' ? specification.seed >>> 0 : hashSeed(`${text}:${entropy}`)
+  return {
+    ...specification,
+    prompt: text || specification?.prompt,
+    seed,
+    entropy,
+  }
 }
 
 async function generateWithLlm({ prompt, apiKey, baseUrl, model, schema, limits, log, requestId, timeoutMs }) {
@@ -264,9 +281,13 @@ export function createWorldGenerationHandler(env = {}, deps = {}) {
       rootDir: join(process.cwd(), config.generatedAssetDir),
     })
 
-  function heuristicResult(prompt) {
+  function heuristicResult(prompt, requestId) {
     return {
-      specification: normalizeSpecification(heuristicWorldFromPrompt(prompt), schema, config.world),
+      specification: attachPromptMeta(
+        normalizeSpecification(heuristicWorldFromPrompt(prompt, { entropy: requestId }), schema, config.world),
+        prompt,
+        requestId
+      ),
       director: 'heuristic',
       retries: 0,
       notice: 'LLM_API_KEY is not set. Using the heuristic world director.',
@@ -275,7 +296,7 @@ export function createWorldGenerationHandler(env = {}, deps = {}) {
 
   async function defaultDirectWorld({ prompt, requestId }) {
     if (!config.llmApiKey) {
-      return heuristicResult(prompt)
+      return heuristicResult(prompt, requestId)
     }
     try {
       const result = await generateWithLlm({
@@ -289,12 +310,16 @@ export function createWorldGenerationHandler(env = {}, deps = {}) {
         requestId,
         timeoutMs: config.llmTimeoutMs,
       })
-      return { ...result, director: 'llm' }
+      return {
+        ...result,
+        specification: attachPromptMeta(result.specification, prompt, requestId),
+        director: 'llm',
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'unknown error'
       log('llm_failure', { requestId, reason: 'fallback_heuristic', detail: detail.slice(0, 240) })
       return {
-        ...heuristicResult(prompt),
+        ...heuristicResult(prompt, requestId),
         notice: `LLM world director failed (${detail.slice(0, 120)}). Used the heuristic director.`,
       }
     }

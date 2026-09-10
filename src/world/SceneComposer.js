@@ -11,6 +11,13 @@ import { inferInteractions, sanitizeInteractions } from './InteractionSchema.js'
 import { reactionNeedsSpawn } from '../interaction/ReactionResolver.js'
 import { hash01 } from '../procedural/objects/hash.js'
 import { isEgyptComposition } from './egyptContext.js'
+import {
+  applyStyleToNeed,
+  formsFromMotif,
+  hashSeed,
+  inferStyleIntent,
+  styleContextText,
+} from './StyleIntent.js'
 
 const LIFE_COUNT = { none: 0, sparse: 1, moderate: 2, abundant: 4 }
 
@@ -84,33 +91,62 @@ function scatterGeneric(description, total, seed, descriptor, opts = {}) {
   })
 }
 
+function exoticGenericDescriptor(form, motif, seed, index, { glowing = true } = {}) {
+  const crystalline = /crystal/i.test(form)
+  const mushroom = form === 'mushroom'
+  const floating = /float/i.test(motif || '') || form === 'ring'
+  return {
+    category: crystalline ? 'crystalline' : mushroom || form === 'organic' || form === 'tree_like' ? 'organic_plant' : 'prop',
+    form,
+    appearance: {
+      scale_hint: seeded(seed, index + 2) > 0.7 ? 'giant' : 'large',
+      color: glowing ? 'bioluminescent' : crystalline ? 'cool' : 'vivid',
+      surface: glowing ? 'glowing' : crystalline ? 'translucent' : 'matte',
+      emission: glowing ? 0.55 + seeded(seed, index + 3) * 0.4 : crystalline ? 0.4 : 0.1,
+      roughness: crystalline ? 0.2 : 0.45,
+      metalness: crystalline ? 0.15 : 0,
+      transparency: crystalline ? 0.35 + seeded(seed, index + 4) * 0.25 : 0.05,
+      hue: Math.floor(seeded(seed, index + 5) * 360),
+    },
+    geometry: {
+      primary_form: form === 'crystal' ? 'crystalline' : form,
+      facets: 6 + Math.floor(seeded(seed, index + 6) * 12),
+      height: 2.2 + seeded(seed, index + 7) * 3.5,
+      width: 1.2 + seeded(seed, index + 8) * 2.5,
+    },
+    behavior: {
+      floating,
+      clustered: seeded(seed, index + 9) > 0.45,
+      count: 1,
+    },
+  }
+}
+
 function vegetationLayer(composition, seed) {
   const { vegetation, density, life, motif } = composition
   if (vegetation === 'none') return []
 
   if (vegetation === 'fungal' || vegetation === 'alien') {
     const count = countFor(density, 8, life)
-    return scatterGeneric(
-      motif || (vegetation === 'fungal' ? 'Giant glowing mushroom' : 'Alien flora'),
-      count,
-      seed + 15,
-      {
-        category: 'organic_plant',
-        form: vegetation === 'fungal' || /mushroom/i.test(motif || '') ? 'mushroom' : 'organic',
-        appearance: {
-          scale_hint: 'giant',
-          color: 'bioluminescent',
-          surface: 'glowing',
-          emission: 0.8,
-          roughness: 0.45,
-          metalness: 0,
-          transparency: 0.05,
-        },
-        geometry: { primary_form: 'mushroom', facets: 8, height: 4, width: 3 },
-        behavior: { floating: false, clustered: true, count: 1 },
-      },
-      { radiusMin: 4, radiusMax: 16, scale: 1 }
-    )
+    const preferFungal = vegetation === 'fungal' || /mushroom|fungi|fungus/i.test(motif || '')
+    const forms = formsFromMotif(motif, seed + 15, Math.max(1, count), { preferFungal })
+    const label = motif || (preferFungal ? 'Exotic fungal flora' : 'Alien flora')
+    const items = []
+    for (let i = 0; i < count; i += 1) {
+      const form = forms[i % forms.length]
+      const descriptor = exoticGenericDescriptor(form, motif, seed + 15, i, {
+        glowing: preferFungal || /glow|biolum|neon/i.test(motif || '') || vegetation === 'alien',
+      })
+      items.push(
+        ...scatterGeneric(`${label} ${form}`, 1, seed + 15 + i * 13, descriptor, {
+          radiusMin: 4,
+          radiusMax: 16,
+          scale: 0.85 + seeded(seed, i + 20) * 0.5,
+          y: descriptor.behavior.floating ? 1.2 + seeded(seed, i + 21) * 2 : 0,
+        })
+      )
+    }
+    return items
   }
 
   if (vegetation === 'coral_reef' || vegetation === 'seaweed') {
@@ -370,27 +406,24 @@ function featureLayer(composition, seed, theme = '') {
 
   if (features === 'crystals' || features === 'fungal_grove') {
     if (features === 'fungal_grove') {
-      return scatterGeneric(
-        composition.motif || 'Glowing mushroom grove',
-        countFor(density, 7, 'abundant'),
-        seed + 122,
-        {
-          category: 'organic_plant',
-          form: 'mushroom',
-          appearance: {
-            scale_hint: 'large',
-            color: 'bioluminescent',
-            surface: 'glowing',
-            emission: 0.85,
-            roughness: 0.4,
-            metalness: 0,
-            transparency: 0.1,
-          },
-          geometry: { primary_form: 'mushroom', facets: 8, height: 3.5, width: 2.5 },
-          behavior: { floating: false, clustered: true, count: 1 },
-        },
-        { radiusMin: 4, radiusMax: 17, scale: 1.1 }
-      )
+      const count = countFor(density, 7, 'abundant')
+      const motif = composition.motif || 'Exotic alien grove'
+      const preferFungal = /mushroom|fungi|fungus|toadstool/i.test(motif)
+      const forms = formsFromMotif(motif, seed + 122, Math.max(1, count), { preferFungal })
+      const items = []
+      for (let i = 0; i < count; i += 1) {
+        const form = forms[i % forms.length]
+        const descriptor = exoticGenericDescriptor(form, motif, seed + 122, i, { glowing: true })
+        items.push(
+          ...scatterGeneric(`${motif} ${form}`, 1, seed + 122 + i * 11, descriptor, {
+            radiusMin: 4,
+            radiusMax: 17,
+            scale: 0.9 + seeded(seed, i + 30) * 0.5,
+            y: descriptor.behavior.floating ? 1.5 : 0,
+          })
+        )
+      }
+      return items
     }
     return scatterGeneric(
       composition.motif || 'Crystal formation',
@@ -660,9 +693,18 @@ export function preferDramaticInteractions(llmRaw, composition, animation = {}) 
  */
 export function composeRoom(room, theme = '', options = {}) {
   const composition = resolveRoomComposition(room, theme)
+  const styleText = styleContextText([
+    options.prompt,
+    theme,
+    room.name,
+    room.environment?.description,
+    composition.motif,
+    ...(room.environment?.tags ?? []),
+  ])
+  const style = options.style ?? inferStyleIntent(styleText)
   const seed =
     options.seed ??
-    Array.from(`${theme}:${room.id}:${composition.biome}`).reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)
+    hashSeed(`${styleText}:${room.id}:${composition.biome}:${options.entropy ?? ''}`)
 
   const maxFill = options.maxFill ?? 40
   // Reserve capacity so life (fish/birds) is not crowded out by rocks/coral.
@@ -679,36 +721,27 @@ export function composeRoom(room, theme = '', options = {}) {
   // Motif fill: if composition names an unknown concept and layers didn't cover it,
   // scatter generic procedural instances from the motif text.
   if (composition.motif && !objects.some((o) => o.type === 'generic')) {
-    const motifFill = scatterGeneric(composition.motif, Math.max(4, countFor(composition.density, 5, composition.life)), seed + 3000, {
-      category: 'organic_plant',
-      form: /crystal/i.test(composition.motif)
-        ? 'crystalline'
-        : /mushroom|fungi/i.test(composition.motif)
-          ? 'mushroom'
-          : 'organic',
-      appearance: {
-        scale_hint: /giant|huge/i.test(composition.motif) ? 'giant' : 'large',
-        color: /glow|biolum|neon/i.test(composition.motif) ? 'bioluminescent' : 'vivid',
-        surface: /glow|biolum/i.test(composition.motif) ? 'glowing' : 'matte',
-        emission: /glow|biolum/i.test(composition.motif) ? 0.8 : 0.1,
-        roughness: 0.45,
-        metalness: 0,
-        transparency: /crystal|glass/i.test(composition.motif) ? 0.4 : 0,
-      },
-      geometry: {
-        primary_form: /crystal/i.test(composition.motif) ? 'crystalline' : /mushroom/i.test(composition.motif) ? 'mushroom' : 'organic',
-        facets: 10,
-        height: 3,
-        width: 2,
-      },
-      behavior: {
-        floating: /float/i.test(composition.motif),
-        clustered: true,
-        count: 1,
-      },
-    })
+    const count = Math.max(4, countFor(composition.density, 5, composition.life))
+    const forms = formsFromMotif(composition.motif, seed + 3000, count)
+    const motifFill = []
+    for (let i = 0; i < count; i += 1) {
+      const form = forms[i % forms.length]
+      const descriptor = exoticGenericDescriptor(form, composition.motif, seed + 3000, i, {
+        glowing: /glow|biolum|neon/i.test(composition.motif),
+      })
+      motifFill.push(
+        ...scatterGeneric(composition.motif, 1, seed + 3000 + i * 9, descriptor, {
+          radiusMin: 4,
+          radiusMax: 15,
+          scale: 0.9 + seeded(seed, i + 40) * 0.4,
+          y: descriptor.behavior.floating ? 1.4 : 0,
+        })
+      )
+    }
     objects = [...objects, ...motifFill].slice(0, maxFill)
   }
+
+  objects = objects.map((item, index) => applyStyleToNeed(item, style, seed, index))
 
   const animation =
     room.animation?.behaviors?.length || room.animation?.static_scene
@@ -723,6 +756,7 @@ export function composeRoom(room, theme = '', options = {}) {
   return {
     composition,
     objects: objects.slice(0, maxFill),
+    style,
     scene: {
       ...compositionSceneOverlay(composition, theme),
       animationSpeed: Math.min(1, 0.35 + (animation.behaviors?.length || 0) * 0.04),

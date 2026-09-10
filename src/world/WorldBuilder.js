@@ -12,6 +12,7 @@ import { resolveAssetUrl } from '../api/apiBase.js'
 import { composeRoom, mergeComposedObjects, mergeSceneConfigs } from './SceneComposer.js'
 import { matchObjectAnimation } from './AnimationSchema.js'
 import { matchObjectInteractions, objectIsInteractive, sanitizeInteractions } from './InteractionSchema.js'
+import { applyStyleToNeed, hashSeed, inferStyleIntent, styleContextText } from './StyleIntent.js'
 
 const OBJECT_SLOTS = [
   [-1.6, 0, -2.8],
@@ -159,9 +160,17 @@ function buildObjects(roomId, resolvedObjects, animation = null, interactions = 
     const resolved = resolveProceduralObject(need)
     const type = resolved.type
     const id = uniqueId(used, `${roomId}-${need.type || type}`)
+    const baseParams = { ...(need.params ?? {}) }
     const params = resolved.descriptor
-      ? { ...(need.params ?? {}), descriptor: resolved.descriptor }
-      : need.params
+      ? { ...baseParams, descriptor: resolved.descriptor }
+      : Object.keys(baseParams).length
+        ? baseParams
+        : undefined
+    const styledColor =
+      need.color ||
+      (Array.isArray(need.params?.colors) && need.params.colors.length
+        ? need.params.colors[index % need.params.colors.length]
+        : null)
     const object = {
       id,
       type,
@@ -171,10 +180,11 @@ function buildObjects(roomId, resolvedObjects, animation = null, interactions = 
       rotation: sanitizeRotation(need.rotation),
       material: need.material,
       detail: need.detail ?? (isLandmarkType(type) ? 'high' : 'medium'),
-      color: entry.asset?.color ?? hashColor(need.description || need.name || type),
+      color: entry.asset?.color ?? styledColor ?? hashColor(need.description || need.name || type),
       params,
       form: need.form || resolved.descriptor?.form,
       category: need.category || resolved.descriptor?.category,
+      appearance: need.appearance || resolved.descriptor?.appearance,
       tags: need.tags,
       interactive: false,
       interactions: [],
@@ -184,7 +194,7 @@ function buildObjects(roomId, resolvedObjects, animation = null, interactions = 
     const matched = matchObjectInteractions(object, interactions)
     if (matched.length) {
       // Bind every matching landmark so each interactive prop is discoverable.
-      // once:true on the shared event still gates the reaction itself.
+      // once:false (default) lets the reaction replay after it completes.
       object.interactions = matched
       object.interactive = objectIsInteractive(object, { events: matched }) || matched.length > 0
     } else if (index === 0 && (type === 'box' || type === 'sphere' || type === 'crate')) {
@@ -221,12 +231,25 @@ export function buildWorld(specification, resolved) {
   const resolvedById = new Map((resolved.rooms ?? []).map((entry) => [entry.spec.id, entry]))
   const roomIds = specRooms.map((room) => room.id)
   const environments = {}
+  const prompt = specification.prompt || specification.description || specification.theme || ''
+  const style = inferStyleIntent(styleContextText([prompt, specification.theme, specification.description]))
+  const baseSeed =
+    typeof specification.seed === 'number'
+      ? specification.seed >>> 0
+      : hashSeed(`${prompt}:${specification.theme}:${specification.description}:${specification.entropy ?? ''}`)
 
   specRooms.forEach((room, index) => {
     const resolvedRoom = resolvedById.get(room.id) ?? resolved.rooms?.[index]
-    const landmarks = landmarkEntriesForRoom(room, resolvedRoom)
+    const landmarks = landmarkEntriesForRoom(room, resolvedRoom).map((entry, landmarkIndex) => {
+      const need = applyStyleToNeed(entry.need ?? entry, style, baseSeed + index * 997, landmarkIndex)
+      return { ...entry, need }
+    })
     const composed = composeRoom(room, specification.theme, {
       maxFill: landmarks.length >= 10 ? 24 : 40,
+      seed: baseSeed + index * 9973,
+      prompt,
+      style,
+      entropy: specification.entropy,
     })
     const mergedNeeds = mergeComposedObjects(
       landmarks.map((entry) => entry.need ?? entry),

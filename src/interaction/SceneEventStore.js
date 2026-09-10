@@ -134,10 +134,11 @@ export function createSceneEventStore() {
   function canTrigger(entry, now) {
     if (!entry) return false
     if (entry.state === 'inactive') return false
-    if (entry.spec.once && (entry.state === 'completed' || entry.state === 'active' || entry.triggerCount > 0)) {
+    // Never stack a second run while the current reaction is still playing.
+    if (entry.state === 'active') return false
+    if (entry.spec.once && (entry.state === 'completed' || entry.triggerCount > 0)) {
       return false
     }
-    if (entry.state === 'active' && entry.spec.once) return false
     if (entry.lastTriggerAt && now - entry.lastTriggerAt < COOLDOWN_MS) return false
     if (entry.spec.trigger === 'after_event') {
       const prior = events.get(entry.spec.after_event)
@@ -186,15 +187,13 @@ export function createSceneEventStore() {
       effects.sound = { id: reaction.sound, until: entry.completesAt }
     }
 
-    // Spawns — dedupe by event id while active
+    // Spawns — replace prior run for this event so repeat clicks can replay
     if (reactionNeedsSpawn(reaction)) {
-      const existing = spawns.filter((s) => s.eventId === eventId && now < s.startedAt + s.duration * 1000)
-      if (existing.length === 0) {
-        const fresh = resolveReactionSpawns(entry.spec, source, now)
-        spawns = [...spawns, ...fresh]
-        if (fresh[0]?.position) {
-          effects.origin = fresh[0].position.slice()
-        }
+      spawns = spawns.filter((s) => s.eventId !== eventId)
+      const fresh = resolveReactionSpawns(entry.spec, source, now)
+      spawns = [...spawns, ...fresh]
+      if (fresh[0]?.position) {
+        effects.origin = fresh[0].position.slice()
       }
     } else if (entry.sourceObjectId || sourceObject?.id) {
       // In-place feedback for glow / flee / bloom / activate on the source mesh

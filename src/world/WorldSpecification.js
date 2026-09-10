@@ -206,6 +206,14 @@ export function createWorldSpecificationSchema(limits = DEFAULT_WORLD_LIMITS) {
     rotation: Vec3.optional(),
     material: z.string().trim().min(1).max(40).optional(),
     detail: z.enum(['low', 'medium', 'high']).optional(),
+    color: z.string().trim().min(1).max(40).optional(),
+    params: z
+      .object({
+        colors: z.array(z.string().trim().min(1).max(40)).max(16).optional(),
+        styled: z.boolean().optional(),
+      })
+      .passthrough()
+      .optional(),
     // Level-2 generic procedural description (unknown concepts)
     category: z.enum(OBJECT_CATEGORIES).optional(),
     form: z.enum(PRIMARY_FORMS).optional(),
@@ -236,6 +244,12 @@ export function createWorldSpecificationSchema(limits = DEFAULT_WORLD_LIMITS) {
     theme: z.string().trim().min(1).max(limits.maxThemeLength),
     description: SemanticText,
     rooms: z.array(RoomNeed).min(1).max(limits.maxRooms),
+    /** Original user prompt — used for style/palette inference at build time. */
+    prompt: z.string().trim().min(1).max(limits.maxDescriptionLength).optional(),
+    /** Stable per-request seed for composer scatter variety. */
+    seed: z.number().int().nonnegative().optional(),
+    /** Extra entropy so re-runs of the same prompt can differ. */
+    entropy: z.union([z.string(), z.number()]).optional(),
   })
 }
 

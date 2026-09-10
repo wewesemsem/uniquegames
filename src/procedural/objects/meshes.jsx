@@ -1,18 +1,8 @@
 import { useMemo } from 'react'
 import { hash01 } from './hash.js'
+import { stoneColor } from './stoneColor.js'
 
-const STONE = ['#c9b896', '#b8a57a', '#d2c09a', '#a89878', '#c4b08c']
-const SAND = ['#d2b48c', '#c4a574', '#e0c9a0', '#b8956a']
-
-function stoneColor(seed, material) {
-  if (material === 'limestone' || !material) {
-    return STONE[Math.floor(hash01(seed, 1) * STONE.length)]
-  }
-  if (material === 'sandstone') return SAND[Math.floor(hash01(seed, 2) * SAND.length)]
-  if (material === 'basalt') return '#4a4a52'
-  if (material === 'metal') return '#8a93a3'
-  return STONE[0]
-}
+export { stoneColor }
 
 function detailSteps(detail) {
   if (detail === 'high') return 10
@@ -21,8 +11,15 @@ function detailSteps(detail) {
 }
 
 /** Layered stone pyramid with platform, seams, and entrance cut. */
-export function PyramidMesh({ detail = 'medium', material = 'limestone', seed = 1 }) {
+export function PyramidMesh({
+  detail = 'medium',
+  material = 'limestone',
+  seed = 1,
+  color,
+  params,
+}) {
   const layers = detailSteps(detail)
+  const style = { params, color }
   const parts = useMemo(() => {
     const items = []
     // Base platform
@@ -30,7 +27,7 @@ export function PyramidMesh({ detail = 'medium', material = 'limestone', seed = 
       key: 'base',
       pos: [0, 0.08, 0],
       size: [2.4, 0.16, 2.4],
-      color: stoneColor(seed, material),
+      color: stoneColor(seed, material, { ...style, salt: 1 }),
     })
     for (let i = 0; i < layers; i += 1) {
       const t = i / layers
@@ -40,18 +37,27 @@ export function PyramidMesh({ detail = 'medium', material = 'limestone', seed = 
         key: `layer-${i}`,
         pos: [0, y, 0],
         size: [w, 1.7 / layers + 0.01, w],
-        color: stoneColor(seed + i, material),
+        color: stoneColor(seed + i, material, { ...style, salt: i + 2 }),
       })
     }
     return items
-  }, [detail, material, seed, layers])
+  }, [detail, material, seed, layers, color, params])
+
+  const emissive = params?.styled ? stoneColor(seed + 50, material, { ...style, salt: 50 }) : '#000000'
+  const emissiveIntensity = params?.styled ? 0.25 : 0
 
   return (
     <group>
       {parts.map((part) => (
         <mesh key={part.key} position={part.pos} castShadow receiveShadow>
           <boxGeometry args={part.size} />
-          <meshStandardMaterial color={part.color} roughness={0.92} flatShading />
+          <meshStandardMaterial
+            color={part.color}
+            roughness={params?.styled ? 0.55 : 0.92}
+            flatShading
+            emissive={emissive}
+            emissiveIntensity={emissiveIntensity}
+          />
         </mesh>
       ))}
       {/* Entrance */}
@@ -62,73 +68,87 @@ export function PyramidMesh({ detail = 'medium', material = 'limestone', seed = 
       {/* Capstone */}
       <mesh position={[0, 1.92, 0]}>
         <coneGeometry args={[0.18, 0.28, 4]} />
-        <meshStandardMaterial color={stoneColor(seed + 99, material)} flatShading />
+        <meshStandardMaterial
+          color={stoneColor(seed + 99, material, { ...style, salt: 99 })}
+          flatShading
+          emissive={emissive}
+          emissiveIntensity={emissiveIntensity}
+        />
       </mesh>
     </group>
   )
 }
 
-export function ObeliskMesh({ material = 'limestone', seed = 1 }) {
-  const color = stoneColor(seed, material)
+export function ObeliskMesh({ material = 'limestone', seed = 1, color, params }) {
+  const style = { params, color }
+  const base = stoneColor(seed, material, { ...style, salt: 1 })
   return (
     <group>
       <mesh position={[0, 0.12, 0]}>
         <boxGeometry args={[0.55, 0.24, 0.55]} />
-        <meshStandardMaterial color={color} roughness={0.9} />
+        <meshStandardMaterial color={base} roughness={params?.styled ? 0.55 : 0.9} />
       </mesh>
       <mesh position={[0, 1.5, 0]}>
         <boxGeometry args={[0.28, 2.6, 0.28]} />
-        <meshStandardMaterial color={stoneColor(seed + 1, material)} roughness={0.88} />
+        <meshStandardMaterial
+          color={stoneColor(seed + 1, material, { ...style, salt: 2 })}
+          roughness={params?.styled ? 0.5 : 0.88}
+        />
       </mesh>
       <mesh position={[0, 2.95, 0]}>
         <coneGeometry args={[0.2, 0.35, 4]} />
-        <meshStandardMaterial color="#d8c9a0" flatShading />
+        <meshStandardMaterial
+          color={stoneColor(seed + 2, material, { ...style, salt: 3 })}
+          flatShading
+        />
       </mesh>
       {/* Glyph bands */}
-      {[0.7, 1.3, 1.9].map((y, i) => (
+      {[0.7, 1.3, 1.9].map((y) => (
         <mesh key={y} position={[0.145, y, 0]}>
           <boxGeometry args={[0.02, 0.35, 0.22]} />
-          <meshStandardMaterial color="#6a5840" />
+          <meshStandardMaterial color={params?.styled ? stoneColor(seed + 8, material, { ...style, salt: 8 }) : '#6a5840'} />
         </mesh>
       ))}
     </group>
   )
 }
 
-export function ColumnMesh({ material = 'limestone', seed = 1 }) {
-  const color = stoneColor(seed, material)
+export function ColumnMesh({ material = 'limestone', seed = 1, color, params }) {
+  const style = { params, color }
+  const base = stoneColor(seed, material, { ...style, salt: 1 })
   return (
     <group>
       <mesh position={[0, 0.12, 0]}>
         <cylinderGeometry args={[0.32, 0.36, 0.24, 12]} />
-        <meshStandardMaterial color={color} />
+        <meshStandardMaterial color={base} />
       </mesh>
       <mesh position={[0, 1.2, 0]}>
         <cylinderGeometry args={[0.22, 0.26, 2.0, 12]} />
-        <meshStandardMaterial color={stoneColor(seed + 2, material)} />
+        <meshStandardMaterial color={stoneColor(seed + 2, material, { ...style, salt: 2 })} />
       </mesh>
       <mesh position={[0, 2.35, 0]}>
         <cylinderGeometry args={[0.34, 0.28, 0.3, 12]} />
-        <meshStandardMaterial color={color} />
+        <meshStandardMaterial color={base} />
       </mesh>
     </group>
   )
 }
 
-export function TempleMesh({ detail = 'medium', material = 'limestone', seed = 1 }) {
+export function TempleMesh({ detail = 'medium', material = 'limestone', seed = 1, color, params }) {
   const cols = detail === 'high' ? 6 : detail === 'low' ? 4 : 5
-  const color = stoneColor(seed, material)
+  const style = { params, color }
+  const base = stoneColor(seed, material, { ...style, salt: 1 })
   return (
     <group>
       <mesh position={[0, 0.15, 0]} receiveShadow>
         <boxGeometry args={[4.2, 0.3, 2.6]} />
-        <meshStandardMaterial color={color} roughness={0.9} />
+        <meshStandardMaterial color={base} roughness={0.9} />
       </mesh>
       {Array.from({ length: cols }, (_, i) => {
         const x = -1.6 + (i / (cols - 1)) * 3.2
         return (
           <group key={i} position={[x, 0.3, 0.9]}>
-            <ColumnMesh material={material} seed={seed + i} />
+            <ColumnMesh material={material} seed={seed + i} color={color} params={params} />
           </group>
         )
       })}
@@ -136,56 +156,57 @@ export function TempleMesh({ detail = 'medium', material = 'limestone', seed = 1
         const x = -1.6 + (i / (cols - 1)) * 3.2
         return (
           <group key={`b-${i}`} position={[x, 0.3, -0.9]}>
-            <ColumnMesh material={material} seed={seed + 10 + i} />
+            <ColumnMesh material={material} seed={seed + 10 + i} color={color} params={params} />
           </group>
         )
       })}
       <mesh position={[0, 2.7, 0]}>
         <boxGeometry args={[4.0, 0.28, 2.5]} />
-        <meshStandardMaterial color={stoneColor(seed + 3, material)} />
+        <meshStandardMaterial color={stoneColor(seed + 3, material, { ...style, salt: 3 })} />
       </mesh>
       <mesh position={[0, 3.05, 0]}>
         <boxGeometry args={[3.6, 0.45, 0.35]} />
-        <meshStandardMaterial color={stoneColor(seed + 4, material)} />
+        <meshStandardMaterial color={stoneColor(seed + 4, material, { ...style, salt: 4 })} />
       </mesh>
       {/* Back wall + entrance */}
       <mesh position={[0, 1.4, -1.15]}>
         <boxGeometry args={[3.6, 2.2, 0.2]} />
-        <meshStandardMaterial color={stoneColor(seed + 5, material)} />
+        <meshStandardMaterial color={stoneColor(seed + 5, material, { ...style, salt: 5 })} />
       </mesh>
       <mesh position={[0, 1.0, -1.0]}>
         <boxGeometry args={[0.7, 1.5, 0.15]} />
         <meshStandardMaterial color="#2c241c" />
       </mesh>
       <group position={[-1.4, 0.3, 1.15]}>
-        <StatueMesh seed={seed + 20} material={material} />
+        <StatueMesh seed={seed + 20} material={material} color={color} params={params} />
       </group>
       <group position={[1.4, 0.3, 1.15]}>
-        <StatueMesh seed={seed + 21} material={material} />
+        <StatueMesh seed={seed + 21} material={material} color={color} params={params} />
       </group>
     </group>
   )
 }
 
-export function StatueMesh({ material = 'limestone', seed = 1 }) {
-  const color = stoneColor(seed, material)
+export function StatueMesh({ material = 'limestone', seed = 1, color, params }) {
+  const style = { params, color }
+  const base = stoneColor(seed, material, { ...style, salt: 1 })
   return (
     <group>
       <mesh position={[0, 0.1, 0]}>
         <boxGeometry args={[0.7, 0.2, 0.7]} />
-        <meshStandardMaterial color={color} />
+        <meshStandardMaterial color={base} />
       </mesh>
       <mesh position={[0, 0.7, 0]}>
         <boxGeometry args={[0.45, 1.0, 0.35]} />
-        <meshStandardMaterial color={stoneColor(seed + 1, material)} />
+        <meshStandardMaterial color={stoneColor(seed + 1, material, { ...style, salt: 2 })} />
       </mesh>
       <mesh position={[0, 1.4, 0]}>
         <boxGeometry args={[0.32, 0.35, 0.32]} />
-        <meshStandardMaterial color={color} />
+        <meshStandardMaterial color={base} />
       </mesh>
       <mesh position={[0, 1.7, 0]}>
         <sphereGeometry args={[0.2, 12, 10]} />
-        <meshStandardMaterial color={stoneColor(seed + 2, material)} />
+        <meshStandardMaterial color={stoneColor(seed + 2, material, { ...style, salt: 3 })} />
       </mesh>
     </group>
   )

@@ -4,6 +4,8 @@
  * This is not a fake LLM: the API reports director: 'heuristic'.
  */
 
+import { applyStyleToNeed, hashSeed, inferStyleIntent } from './StyleIntent.js'
+
 function room(id, name, description, tags, objects, hotspots = [], composition = undefined) {
   return {
     id,
@@ -21,6 +23,40 @@ function objectNeed(type, description, tags = [], extras = {}) {
 
 function hotspot(id, label, targetRoom, description) {
   return { id, label, targetRoom, description }
+}
+
+function decorateSpec(spec, prompt, { entropy } = {}) {
+  const style = inferStyleIntent(prompt)
+  const seed = hashSeed(`${prompt}:${entropy ?? ''}`)
+  const next = structuredClone(spec)
+  next.prompt = String(prompt ?? '').trim()
+  next.seed = seed
+  if (entropy != null) next.entropy = entropy
+  if (style.vivid || style.paletteMode !== 'none') {
+    next.description = next.description
+      ? `${next.description} (${String(prompt).trim()})`
+      : String(prompt).trim()
+  }
+  next.rooms = (next.rooms ?? []).map((r, roomIndex) => {
+    const colorfulName =
+      style.paletteMode === 'rainbow' && /pyramid|egypt|giza/i.test(`${r.name} ${r.environment?.description ?? ''}`)
+        ? r.name.replace(/Giza Plateau/i, 'Colorful Pyramid Plateau').replace(/Temple Court/i, 'Colorful Temple Court')
+        : r.name
+    return {
+      ...r,
+      name: colorfulName,
+      environment: {
+        ...r.environment,
+        description:
+          style.vivid && r.environment?.description && !/rainbow|colorful|neon|glow/i.test(r.environment.description)
+            ? `${r.environment.description} — ${String(prompt).trim()}`
+            : r.environment?.description,
+        tags: [...new Set([...(r.environment?.tags ?? []), ...(style.vivid ? ['colorful'] : [])])],
+      },
+      objects: (r.objects ?? []).map((obj, i) => applyStyleToNeed(obj, style, seed + roomIndex * 17, i)),
+    }
+  })
+  return next
 }
 
 const THEMES = [
@@ -271,7 +307,7 @@ const THEMES = [
     },
   },
   {
-    test: /alien|mushroom|fungi|biolumines|exoplanet|glowing mushroom/i,
+    test: /mushroom|fungi|fungus|toadstool|glowing mushroom/i,
     spec: {
       theme: 'alien_planet',
       description: 'An alien world of glowing fungal forests',
@@ -373,6 +409,95 @@ const THEMES = [
             atmosphere: 'bioluminescent',
             density: 0.7,
             motif: 'glowing crystal ridge',
+          }
+        ),
+      ],
+    },
+  },
+  {
+    test: /alien|exoplanet|biolumines|otherworld/i,
+    spec: {
+      theme: 'alien_planet',
+      description: 'An alien world of strange flora and crystalline terrain',
+      rooms: [
+        room(
+          'room1',
+          'Alien Arrival',
+          'Strange alien clearing with mixed exotic flora',
+          ['alien', 'exotic', 'bioluminescent'],
+          [
+            {
+              type: 'generic',
+              name: 'Alien landmark',
+              description: 'Tall exotic alien landmark',
+              tags: ['landmark', 'alien'],
+              category: 'organic_plant',
+              form: 'spire',
+              appearance: {
+                scale_hint: 'giant',
+                color: 'bioluminescent',
+                surface: 'glowing',
+                emission: 0.8,
+                roughness: 0.4,
+                metalness: 0,
+                transparency: 0.1,
+              },
+              geometry: { primary_form: 'spire', facets: 10, height: 5, width: 2.2 },
+              behavior: { floating: false, clustered: false, count: 1 },
+              position: [0, 0, -10],
+              scale: [2.2, 2.2, 2.2],
+              detail: 'high',
+            },
+          ],
+          [hotspot('to-ridge', 'Crystal Ridge', 'room2', 'Walk toward the crystals')],
+          {
+            biome: 'alien',
+            life: 'moderate',
+            vegetation: 'alien',
+            large_features: 'crystals',
+            atmosphere: 'bioluminescent',
+            density: 0.85,
+            motif: 'strange alien flora',
+          }
+        ),
+        room(
+          'room2',
+          'Crystal Ridge',
+          'Alien ridge of translucent glowing crystals',
+          ['alien', 'crystal', 'ridge'],
+          [],
+          [
+            hotspot('to-arrival', 'Alien Arrival', 'room1', 'Return to the clearing'),
+            hotspot('to-orbit', 'Orbital Shelf', 'room3', 'Climb toward the orbital shelf'),
+          ],
+          {
+            biome: 'alien',
+            life: 'sparse',
+            vegetation: 'alien',
+            large_features: 'crystals',
+            atmosphere: 'bioluminescent',
+            density: 0.75,
+            motif: 'floating crystal forms',
+          }
+        ),
+        room(
+          'room3',
+          'Orbital Shelf',
+          'Alien shelf under a nebula sky with scattered exotic props',
+          ['alien', 'space', 'nebula'],
+          [
+            objectNeed('asteroid', 'Drifting rock', ['rock'], { position: [-6, 3, -12], scale: [1.4, 1.4, 1.4] }),
+            objectNeed('planet', 'Distant world', ['planet'], { position: [14, 8, -24], scale: [2.6, 2.6, 2.6] }),
+          ],
+          [hotspot('to-ridge-2', 'Crystal Ridge', 'room2', 'Return to the ridge')],
+          {
+            biome: 'deep_space',
+            life: 'none',
+            vegetation: 'alien',
+            large_features: 'ships',
+            atmosphere: 'nebula',
+            density: 0.55,
+            motif: 'alien orbital flora',
           }
         ),
       ],
@@ -571,47 +696,52 @@ function titleCase(value) {
     .slice(0, 80)
 }
 
-export function heuristicWorldFromPrompt(prompt) {
+export function heuristicWorldFromPrompt(prompt, options = {}) {
   const text = String(prompt ?? '').trim()
   for (const entry of THEMES) {
-    if (entry.test.test(text)) {
-      return structuredClone(entry.spec)
-    }
+    if (!entry.test.test(text)) continue
+    // "alien space" should use alien variety, not the orbital station kit.
+    if (entry.spec.theme === 'space' && /alien/i.test(text)) continue
+    return decorateSpec(entry.spec, text, options)
   }
 
   const theme = slug(text) || 'exploration'
   const label = (titleCase(text).replace(/^(A|An|The)\s+/, '').split(' ').slice(0, 4).join(' ') || 'Exploration').slice(0, 32)
-  return {
-    theme,
-    description: `An exploration of ${label}`,
-    rooms: [
-      room(
-        'room1',
-        `${label} Arrival`,
-        `${label} arrival interior`,
-        [theme, 'interior'],
-        [objectNeed('console', `${label} welcome console`, ['console']), objectNeed('crate', 'Supply crate', ['crate'])],
-        [hotspot('to-room-2', 'Landmark', 'room2', `Continue through ${label}`)]
-      ),
-      room(
-        'room2',
-        `${label} Landmark`,
-        `${label} landmark environment`,
-        [theme, 'landmark'],
-        [objectNeed('statue', `${label} landmark statue`, ['statue'])],
-        [
-          hotspot('to-room-1', 'Arrival', 'room1', 'Return to arrival'),
-          hotspot('to-room-3', 'Horizon', 'room3', `Go onward through ${label}`),
-        ]
-      ),
-      room(
-        'room3',
-        `${label} Horizon`,
-        `${label} horizon landscape`,
-        [theme, 'horizon'],
-        [objectNeed('orb', `${label} marker orb`, ['sphere'])],
-        [hotspot('to-room-2', 'Landmark', 'room2', 'Return to the landmark')]
-      ),
-    ],
-  }
+  return decorateSpec(
+    {
+      theme,
+      description: `An exploration of ${label}`,
+      rooms: [
+        room(
+          'room1',
+          `${label} Arrival`,
+          `${label} arrival interior`,
+          [theme, 'interior'],
+          [objectNeed('console', `${label} welcome console`, ['console']), objectNeed('crate', 'Supply crate', ['crate'])],
+          [hotspot('to-room-2', 'Landmark', 'room2', `Continue through ${label}`)]
+        ),
+        room(
+          'room2',
+          `${label} Landmark`,
+          `${label} landmark environment`,
+          [theme, 'landmark'],
+          [objectNeed('statue', `${label} landmark statue`, ['statue'])],
+          [
+            hotspot('to-room-1', 'Arrival', 'room1', 'Return to arrival'),
+            hotspot('to-room-3', 'Horizon', 'room3', `Go onward through ${label}`),
+          ]
+        ),
+        room(
+          'room3',
+          `${label} Horizon`,
+          `${label} horizon landscape`,
+          [theme, 'horizon'],
+          [objectNeed('orb', `${label} marker orb`, ['sphere'])],
+          [hotspot('to-room-2', 'Landmark', 'room2', 'Return to the landmark')]
+        ),
+      ],
+    },
+    text,
+    options
+  )
 }

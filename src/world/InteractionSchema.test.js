@@ -26,7 +26,7 @@ describe('InteractionSchema', () => {
     assert.ok(mummy)
     assert.equal(mummy.target, 'pyramid')
     assert.equal(mummy.trigger, 'click')
-    assert.equal(mummy.once, true)
+    assert.equal(mummy.once, false)
     assert.equal(mummy.reaction.animation, 'chase_player')
   })
 
@@ -127,12 +127,57 @@ describe('ReactionResolver', () => {
 })
 
 describe('SceneEventStore', () => {
-  it('respects once:true and prevents duplicate spawns', () => {
+  it('blocks re-trigger while active even when once is false', () => {
+    const store = createSceneEventStore()
+    const interactions = {
+      events: [
+        {
+          id: 'pyramid_entrance_mummy',
+          target: 'pyramid',
+          trigger: 'click',
+          once: false,
+          interactive: true,
+          delay: 0,
+          proximity: 4,
+          gaze_duration: 1.2,
+          multi_count: 2,
+          reaction: {
+            type: 'creature_appearance',
+            subject: 'mummy',
+            animation: 'chase_player',
+            duration: 4,
+            count: 1,
+            scale: 2.6,
+          },
+        },
+      ],
+    }
+    const objects = [
+      {
+        id: 'room1-pyramid',
+        type: 'pyramid',
+        position: [0, 0, -14],
+        interactions: interactions.events,
+      },
+    ]
+    store.resetRoom('room1', interactions, objects)
+    const now = 1_000_000
+    assert.equal(store.triggerByObject('room1-pyramid', 'click', { sourceObject: objects[0], now }), true)
+    assert.equal(store.getEventState('pyramid_entrance_mummy'), 'active')
+    assert.equal(
+      store.triggerByObject('room1-pyramid', 'click', { sourceObject: objects[0], now: now + 100 }),
+      false
+    )
+  })
+
+  it('replays click reactions after the previous response completes', () => {
     const store = createSceneEventStore()
     const interactions = inferInteractions({
       biome: 'desert_plateau',
       large_features: 'pyramids',
     })
+    const mummy = interactions.events.find((e) => e.id === 'pyramid_entrance_mummy')
+    assert.equal(mummy.once, false)
     const objects = [
       {
         id: 'room1-pyramid',
@@ -143,18 +188,60 @@ describe('SceneEventStore', () => {
     ]
     store.resetRoom('room1', interactions, objects)
     const now = 1_000_000
-    const first = store.triggerByObject('room1-pyramid', 'click', { sourceObject: objects[0], now })
-    assert.equal(first, true)
-    const snap1 = store.getSnapshot()
-    assert.ok(snap1.spawns.length >= 1)
-    const second = store.triggerByObject('room1-pyramid', 'click', {
-      sourceObject: objects[0],
-      now: now + 100,
-    })
-    assert.equal(second, false)
+    assert.equal(store.triggerByObject('room1-pyramid', 'click', { sourceObject: objects[0], now }), true)
+    const firstSpawns = store.getSnapshot().spawns.length
+    assert.ok(firstSpawns >= 1)
+    store.tick(now + 13_000)
+    assert.equal(store.getEventState('pyramid_entrance_mummy'), 'available')
+    assert.equal(
+      store.triggerByObject('room1-pyramid', 'click', { sourceObject: objects[0], now: now + 14_000 }),
+      true
+    )
     assert.equal(store.getEventState('pyramid_entrance_mummy'), 'active')
-    store.tick(now + 13000)
-    assert.equal(store.getEventState('pyramid_entrance_mummy'), 'completed')
+    assert.ok(store.getSnapshot().spawns.length >= 1)
+  })
+
+  it('respects once:true and stays completed after finish', () => {
+    const store = createSceneEventStore()
+    const interactions = {
+      events: [
+        {
+          id: 'one_shot',
+          target: 'pyramid',
+          trigger: 'click',
+          once: true,
+          interactive: true,
+          delay: 0,
+          proximity: 4,
+          gaze_duration: 1.2,
+          multi_count: 2,
+          reaction: {
+            type: 'particles',
+            animation: 'burst',
+            duration: 2,
+            count: 1,
+            particles: 'sparks',
+          },
+        },
+      ],
+    }
+    const objects = [
+      {
+        id: 'room1-pyramid',
+        type: 'pyramid',
+        position: [0, 0, -14],
+        interactions: interactions.events,
+      },
+    ]
+    store.resetRoom('room1', interactions, objects)
+    const now = 1_000_000
+    assert.equal(store.triggerByObject('room1-pyramid', 'click', { sourceObject: objects[0], now }), true)
+    store.tick(now + 3000)
+    assert.equal(store.getEventState('one_shot'), 'completed')
+    assert.equal(
+      store.triggerByObject('room1-pyramid', 'click', { sourceObject: objects[0], now: now + 4000 }),
+      false
+    )
   })
 })
 

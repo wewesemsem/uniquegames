@@ -130,7 +130,7 @@ export const InteractionEventSchema = z.object({
   target: z.string().trim().min(1).max(64),
   trigger: z.enum(TRIGGER_TYPES).default('click'),
   interactive: z.boolean().default(true),
-  once: z.boolean().default(true),
+  once: z.boolean().default(false),
   delay: z.number().min(0).max(120).default(0),
   proximity: z.number().min(0.5).max(40).default(4),
   gaze_duration: z.number().min(0.2).max(10).default(1.2),
@@ -218,7 +218,7 @@ export function sanitizeInteractionEvent(raw, index = 0) {
     target,
     trigger,
     interactive: raw.interactive !== false,
-    once: raw.once !== false,
+    once: raw.once === true,
     delay: clampNumber(raw.delay, 0, 120, 0),
     proximity: clampNumber(raw.proximity ?? raw.radius, 0.5, 40, 4),
     gaze_duration: clampNumber(raw.gaze_duration ?? raw.gazeDuration, 0.2, 10, 1.2),
@@ -262,7 +262,7 @@ export function inferInteractions(composition = {}, options = {}) {
       id: 'pyramid_entrance_mummy',
       target: 'pyramid',
       trigger: 'click',
-      once: true,
+      once: false,
       reaction: {
         type: 'creature_appearance',
         subject: 'mummy',
@@ -277,7 +277,7 @@ export function inferInteractions(composition = {}, options = {}) {
       id: 'statue_reveal',
       target: 'statue',
       trigger: 'click',
-      once: true,
+      once: false,
       reaction: {
         type: 'spawn',
         subject: 'artifact',
@@ -295,7 +295,7 @@ export function inferInteractions(composition = {}, options = {}) {
       id: 'sarcophagus_open',
       target: 'statue',
       trigger: 'click',
-      once: true,
+      once: false,
       reaction: {
         type: 'open',
         subject: 'artifact',
@@ -320,7 +320,7 @@ export function inferInteractions(composition = {}, options = {}) {
       id: 'door_mummy',
       target: 'ancient_door',
       trigger: 'click',
-      once: true,
+      once: false,
       reaction: {
         type: 'creature_appearance',
         subject: 'mummy',
@@ -338,7 +338,7 @@ export function inferInteractions(composition = {}, options = {}) {
       id: 'reef_whale',
       target: 'coral',
       trigger: 'click',
-      once: true,
+      once: false,
       reaction: {
         type: 'animal_appearance',
         subject: 'whale',
@@ -361,7 +361,7 @@ export function inferInteractions(composition = {}, options = {}) {
         id: 'chest_open',
         target: 'crate',
         trigger: 'click',
-        once: true,
+        once: false,
         reaction: {
           type: 'open',
           subject: 'treasure',
@@ -380,7 +380,7 @@ export function inferInteractions(composition = {}, options = {}) {
       id: 'flowers_butterflies',
       target: 'flower',
       trigger: 'click',
-      once: true,
+      once: false,
       reaction: {
         type: 'animal_appearance',
         subject: 'butterfly',
@@ -406,7 +406,7 @@ export function inferInteractions(composition = {}, options = {}) {
       id: 'tree_birds',
       target: 'tree',
       trigger: 'click',
-      once: true,
+      once: false,
       reaction: {
         type: 'animal_appearance',
         subject: 'bird',
@@ -423,7 +423,7 @@ export function inferInteractions(composition = {}, options = {}) {
       id: 'ship_activate',
       target: 'spaceship',
       trigger: 'click',
-      once: true,
+      once: false,
       reaction: {
         type: 'spawn',
         subject: 'asteroid',
@@ -453,7 +453,7 @@ export function inferInteractions(composition = {}, options = {}) {
       id: 'asteroid_touch',
       target: 'asteroid',
       trigger: 'click',
-      once: true,
+      once: false,
       reaction: { type: 'particles', animation: 'burst', duration: 2, particles: 'sparks' },
     })
   }
@@ -471,7 +471,7 @@ export function inferInteractions(composition = {}, options = {}) {
       id: 'crystal_spawn',
       target: 'generic',
       trigger: 'click',
-      once: true,
+      once: false,
       reaction: {
         type: 'spawn',
         subject: 'crystal',
