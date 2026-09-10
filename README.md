@@ -64,32 +64,55 @@ The panorama is a sky sphere around the same 3D world. It does not replace the g
 
 ## AI world director
 
-Natural-language prompts become **three distinct procedural 360° rooms** with real 3D landmarks (default) without image generation:
+Natural-language prompts become **three distinct procedural 360° rooms** with real 3D landmarks (default) without image generation. Almost the whole pipeline is JavaScript; the LLM only returns JSON intent — it never draws skies or builds meshes.
 
 ```text
-User (text / voice)
-  → WorldPrompt
-  → POST /api/world/generate
-  → WorldDirector (LLM or heuristic) → World Specification (semantic scene graph)
-  → SceneDirector → SceneConfiguration (sky/atmosphere JSON)
-  → p5.js equirectangular backdrop  +  Three.js procedural object library
-  → Existing World (floor/grid) + hotspots + WebXR
+FRONTEND (React / JS)             BACKEND (Node.js)                EXTERNAL
+─────────────────────             ─────────────────                ────────
+Text / voice
+WorldPrompt UI
+     │
+     │  POST /api/world/generate
+     ▼
+                              Rate limit + Zod validation
+                              WorldDirector (server)
+                                ├─ LLM chat API ──────────────► OpenAI-compatible
+                                │    returns World Spec JSON
+                                └─ or heuristicDirector.js
+                              SceneDirector (server JS)
+                                ├─ LLM → SceneConfiguration
+                                │    (sky/atmosphere enums)
+                                └─ or heuristicScenes…
+                              [IMAGE mode only]
+                                AssetResolver → catalog/cache
+                                  → budgeted image gen ───────► Image API
+     │
+     │  JSON: spec + scene configs
+     │        (+ panorama URLs)
+     ▼
+WorldBuilder.js
+  └─ SceneComposer.js          ← expands composition → object lists
+ObjectResolver.js              ← type → mesh generators
+ProceduralPanorama (p5.js)     ← paints equirect sky canvas
+Three.js / R3F                 ← meshes, hotspots, player
+environmentStore.replaceWorld()
+Environment.jsx renders rooms
 ```
+
+| Step | Module | Side | Role |
+| --- | --- | --- | --- |
+| Input UI | `WorldPrompt` / voice | Frontend | Collect prompt |
+| Rate limit / validate | `server/world-generation.js` | Backend | Gate + Zod |
+| World direction | Server director (+ optional LLM) | Backend | Theme, rooms, composition intent, landmarks |
+| Scene direction | `server/procedural/sceneDirector.js` | Backend | Sky/atmosphere `SceneConfiguration` |
+| Scene composing | `src/world/SceneComposer.js` via `WorldBuilder` | Frontend | Expand composition intent into object lists/positions |
+| Mesh resolve | `ObjectResolver.js` | Frontend | Map types → procedural generators |
+| Sky paint | `ProceduralPanorama` | Frontend | p5 equirect canvas → texture |
+| Render | `Environment.jsx` + R3F | Frontend | Walkable scene + WebXR |
+| Image panoramas | AssetResolver | Backend | Only if `ENVIRONMENT_MODE=IMAGE_GENERATION` |
 
 The LLM describes **what is in the world** (pyramid, temple, spaceship, …) with optional positions/scales.  
-**p5.js** paints the sky/atmosphere. **Three.js** builds recognizable meshes via `ObjectResolver` → generators. Image generation remains available via `ENVIRONMENT_MODE=IMAGE_GENERATION`.
-
-```text
-User (text or voice)
-  → POST /api/world/generate
-  → Rate limiter (IP / future user key)
-  → Request validation
-  → World Specification (Zod + size limits)
-  → PROCEDURAL_360: SceneConfiguration → p5 equirect → CanvasTexture sphere
-  → IMAGE_GENERATION: Asset Resolver (catalog → cache → budgeted generation → fallback)
-  → World State
-  → React Three Fiber (panorama + objects + hotspots)
-```
+**SceneDirector** (backend) produces sky/atmosphere JSON. **SceneComposer** (frontend) deterministically fills rooms. **p5.js** paints the sky; **Three.js** builds meshes via `ObjectResolver` → generators.
 
 Rate limiting is **server-side**. The frontend handles HTTP 429 and disables double-submit as UX only. Cached catalog assets do not consume the generation budget. Missing assets fall back to placeholders instead of failing the whole world.
 
