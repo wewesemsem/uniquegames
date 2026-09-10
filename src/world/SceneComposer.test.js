@@ -27,10 +27,56 @@ describe('CompositionSchema', () => {
     assert.equal(c.atmosphere, 'pollen')
   })
 
+  it('infers japan temples as cultural motif, not egypt', () => {
+    const c = inferComposition({ theme: 'japan', description: 'shrine courtyard', tags: ['japan', 'temple'] })
+    assert.notEqual(c.biome, 'temple_court')
+    assert.equal(c.large_features, 'temples')
+    assert.match(c.motif || '', /japan|shrine/i)
+  })
+
+  it('keeps egypt temple_court for egyptian prompts', () => {
+    const c = inferComposition({
+      theme: 'ancient_egypt',
+      description: 'Ancient Egyptian temple courtyard',
+      tags: ['egypt', 'temple'],
+      roomId: 'room2',
+    })
+    assert.equal(c.biome, 'temple_court')
+    assert.equal(c.large_features, 'temples')
+  })
+
+  it('demotes LLM temple_court without egypt signals', () => {
+    const c = resolveRoomComposition(
+      {
+        id: 'room1',
+        name: 'Shrine',
+        environment: { description: 'japanese shrine', tags: ['japan'] },
+        composition: {
+          biome: 'temple_court',
+          life: 'sparse',
+          vegetation: 'desert_scrub',
+          large_features: 'temples',
+          atmosphere: 'dusty',
+          density: 0.6,
+        },
+      },
+      'japan'
+    )
+    assert.equal(c.biome, 'generic')
+    assert.equal(c.large_features, 'temples')
+    assert.match(c.motif || '', /japan|shrine|temple/i)
+  })
+
   it('sanitizes unknown enum values', () => {
     const c = sanitizeComposition({ biome: 'not-real', life: 'lots', density: 2 })
     assert.equal(c.biome, 'generic')
     assert.ok(c.density <= 1)
+  })
+
+  it('does not fuzzy-map bare temple biome to temple_court', () => {
+    const c = sanitizeComposition({ biome: 'temple', large_features: 'temple' })
+    assert.notEqual(c.biome, 'temple_court')
+    assert.equal(c.large_features, 'temples')
   })
 })
 
@@ -79,6 +125,51 @@ describe('SceneComposer', () => {
     )
     assert.ok(result.objects.some((o) => o.type === 'flower'))
     assert.equal(compositionSceneOverlay(result.composition).particles, 'pollen')
+  })
+
+  it('uses generic cultural temples for japan, not egyptian limestone temple', () => {
+    const result = composeRoom(
+      {
+        id: 'room1',
+        name: 'Shrine',
+        environment: { description: 'japanese shrine courtyard', tags: ['japan', 'shrine'] },
+        composition: {
+          biome: 'temple_court',
+          life: 'sparse',
+          vegetation: 'desert_scrub',
+          large_features: 'temples',
+          atmosphere: 'dusty',
+          density: 0.65,
+        },
+      },
+      'japan'
+    )
+    assert.ok(result.objects.some((o) => o.type === 'generic'))
+    assert.ok(!result.objects.some((o) => o.type === 'temple'))
+    assert.ok(!result.objects.some((o) => o.type === 'obelisk'))
+    assert.notEqual(result.scene.environment, 'egypt')
+  })
+
+  it('keeps egyptian temple mesh for egypt temple courts', () => {
+    const result = composeRoom(
+      {
+        id: 'room2',
+        name: 'Temple Court',
+        environment: { description: 'Ancient Egyptian temple courtyard', tags: ['egypt', 'temple'] },
+        composition: {
+          biome: 'temple_court',
+          life: 'sparse',
+          vegetation: 'desert_scrub',
+          large_features: 'temples',
+          atmosphere: 'dusty',
+          density: 0.65,
+          motif: 'ancient egyptian temple court',
+        },
+      },
+      'ancient_egypt'
+    )
+    assert.ok(result.objects.some((o) => o.type === 'temple'))
+    assert.equal(result.scene.environment, 'egypt')
   })
 
   it('keeps LLM landmarks when merging', () => {

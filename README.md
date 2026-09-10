@@ -64,7 +64,7 @@ The panorama is a sky sphere around the same 3D world. It does not replace the g
 
 ## AI world director
 
-Natural-language prompts become **three distinct procedural 360° rooms** with real 3D landmarks (default) without image generation. Almost the whole pipeline is JavaScript; the LLM only returns JSON intent — it never draws skies or builds meshes.
+Users describe a world in natural language; a **backend WorldDirector** (LLM or heuristic) returns a Zod-validated **World Specification** — theme, rooms, composition intent, and landmarks as JSON only. A **SceneDirector** then produces sky/atmosphere configs (again LLM or heuristic). The **frontend** expands that intent with **SceneComposer**, paints equirect skies in **p5.js**, and builds walkable 3D rooms in **Three.js / React Three Fiber** (optional WebXR) — so the model directs world building while JavaScript composes and renders it. Image panoramas are an alternate backend path (`ENVIRONMENT_MODE=IMAGE_GENERATION`).
 
 ```text
 FRONTEND (React / JS)             BACKEND (Node.js)                EXTERNAL

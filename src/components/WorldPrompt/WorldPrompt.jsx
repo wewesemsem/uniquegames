@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { composeMusic } from '../../api/musicApi.js'
+import { heuristicMusicSpecification } from '../../audio/MusicSpecification.js'
 import { useWorldMusic } from '../../audio/useWorldMusic.js'
 import { createVoiceInput, isSpeechRecognitionAvailable } from '../../input/VoiceInput.js'
 import { useWorldState, worldStore } from '../../world/WorldState.js'
@@ -50,15 +52,30 @@ export function WorldPrompt() {
     return () => window.clearInterval(id)
   }, [world.retryUntil])
 
+  async function startMusicFromField(musicPrompt) {
+    if (music.reducedMotion) {
+      return
+    }
+    const prompt = String(musicPrompt ?? '').trim()
+    try {
+      if (!prompt) {
+        music.playFromSpec(heuristicMusicSpecification(''))
+        return
+      }
+      const result = await composeMusic(prompt)
+      music.playFromSpec(result.specification)
+    } catch {
+      music.playFromSpec(heuristicMusicSpecification(prompt))
+    }
+  }
+
   function submit(environmentMode = 'PROCEDURAL_360') {
     const prompt = text.trim()
     if (!prompt || busy || waiting) {
       return
     }
-    // Explore click is a user gesture — unlock Web Audio and start the mood score.
-    if (!music.reducedMotion) {
-      music.playForMood(musicMood)
-    }
+    // Music field is its own prompt — never mixed into world generation.
+    void startMusicFromField(musicMood)
     worldStore.requestWorld(prompt, { environmentMode })
   }
 
@@ -118,7 +135,7 @@ export function WorldPrompt() {
                 type="text"
                 value={musicMood}
                 onChange={(event) => setMusicMood(event.target.value)}
-                placeholder="fun, horror, mellow…"
+                placeholder="thriller, lo-fi rain, chaotic jazz…"
                 disabled={busy}
                 autoComplete="off"
               />

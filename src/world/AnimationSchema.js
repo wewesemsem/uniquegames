@@ -168,7 +168,12 @@ export function inferAnimation(composition = {}, options = {}) {
     add('particles', 'drift', 'slow')
     add('light_rays', 'drift', 'slow', { variation: 'low' })
     add('atmosphere', 'wave', 'slow')
-  } else if (biome === 'desert_plateau' || biome === 'temple_court' || biome === 'tomb' || /egypt|desert/.test(biome)) {
+  } else if (
+    biome === 'desert_plateau' ||
+    biome === 'temple_court' ||
+    biome === 'tomb' ||
+    (/egypt|desert/.test(biome) && features !== 'temples')
+  ) {
     add('sand', 'drift', 'slow')
     add('dust', 'drift', 'slow')
     add('particles', 'drift', 'slow')
@@ -178,6 +183,13 @@ export function inferAnimation(composition = {}, options = {}) {
     add('atmosphere', 'drift', 'slow')
     if (features === 'pyramids' || features === 'temples') {
       // Architecture stays static — no pyramid/temple behaviors on purpose.
+    }
+  } else if (features === 'temples') {
+    add('particles', 'drift', 'slow')
+    add('atmosphere', 'wave', 'slow')
+    add('tree', 'sway', 'slow', { variation: 'low' })
+    if (life !== 'none') {
+      add('bird', 'fly', 'medium', { group_behavior: 'flocking' })
     }
   } else if (biome === 'meadow' || vegetation === 'meadow') {
     add('flower', 'sway', 'slow', { variation: 'medium' })

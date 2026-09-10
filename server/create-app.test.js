@@ -38,10 +38,16 @@ describe('createApp', () => {
       res.setHeader('Content-Type', 'application/json')
       res.end(JSON.stringify({ ok: true, specification: { theme: 'test' } }))
     }
+    const handleMusic = async (_req, res) => {
+      res.statusCode = 200
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ ok: true, specification: { label: 'thriller', bpm: 98 } }))
+    }
     const app = createApp(
       { CORS_ORIGINS: 'https://app.netlify.app' },
       {
         handle,
+        handleMusic,
         serveGenerated: (_req, _res, next) => next(),
       }
     )

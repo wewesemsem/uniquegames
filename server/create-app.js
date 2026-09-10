@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { applyCorsHeaders, parseCorsOrigins } from './cors.js'
 import { sendJson } from './http.js'
 import { createGeneratedAssetsMiddleware } from './images/serve-generated.js'
+import { createMusicComposeHandler } from './music-generation.js'
 import { createWorldGenerationHandler } from './world-generation.js'
 
 function requestPath(req) {
@@ -10,6 +11,10 @@ function requestPath(req) {
 
 function isWorldGenerate(path) {
   return path === '/api/world/generate'
+}
+
+function isMusicCompose(path) {
+  return path === '/api/music/compose'
 }
 
 function isHealth(path) {
@@ -21,6 +26,7 @@ function isHealth(path) {
  */
 export function createApp(env = process.env, deps = {}) {
   const handle = deps.handle ?? createWorldGenerationHandler(env)
+  const handleMusic = deps.handleMusic ?? createMusicComposeHandler(env)
   const generatedRoot =
     deps.generatedRoot ?? join(process.cwd(), env.GENERATED_ASSET_DIR || 'public/generated')
   const serveGenerated = deps.serveGenerated ?? createGeneratedAssetsMiddleware(generatedRoot)
@@ -51,7 +57,9 @@ export function createApp(env = process.env, deps = {}) {
     }
 
     serveGenerated(req, res, () => {
-      if (!isWorldGenerate(path)) {
+      const musicRoute = isMusicCompose(path)
+      const worldRoute = isWorldGenerate(path)
+      if (!musicRoute && !worldRoute) {
         sendJson(res, 404, { error: 'not_found' })
         return
       }
@@ -61,7 +69,8 @@ export function createApp(env = process.env, deps = {}) {
         return
       }
 
-      Promise.resolve(handle(req, res)).catch((error) => {
+      const routeHandle = musicRoute ? handleMusic : handle
+      Promise.resolve(routeHandle(req, res)).catch((error) => {
         if (!res.headersSent) {
           sendJson(res, 500, {
             error: 'internal_error',

@@ -22,5 +22,6 @@ export function useWorldMusic() {
     toggleMute: () => engine.toggleMute(),
     setMood: (mood) => engine.setMood(mood),
     playForMood: (mood) => engine.playForMood(mood),
+    playFromSpec: (specification) => engine.playFromSpec(specification),
   }
 }

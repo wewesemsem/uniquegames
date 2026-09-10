@@ -10,6 +10,7 @@ import { inferAnimation, sanitizeAnimation } from './AnimationSchema.js'
 import { inferInteractions, sanitizeInteractions } from './InteractionSchema.js'
 import { reactionNeedsSpawn } from '../interaction/ReactionResolver.js'
 import { hash01 } from '../procedural/objects/hash.js'
+import { isEgyptComposition } from './egyptContext.js'
 
 const LIFE_COUNT = { none: 0, sparse: 1, moderate: 2, abundant: 4 }
 
@@ -237,30 +238,30 @@ function lifeLayer(composition, seed) {
   return []
 }
 
-function featureLayer(composition, seed) {
+function featureLayer(composition, seed, theme = '') {
   const { large_features: features, density, biome } = composition
   if (features === 'none') return []
 
   if (features === 'pyramids') {
     return [
       need('pyramid', 'Great pyramid', {
-        tags: ['pyramid', 'landmark'],
+        tags: ['pyramid', 'landmark', 'egypt'],
         position: [0, 0, -14],
         scale: [5, 5, 5],
         detail: 'high',
       }),
       need('pyramid', 'Secondary pyramid', {
-        tags: ['pyramid'],
+        tags: ['pyramid', 'egypt'],
         position: [-10, 0, -18],
         scale: [3.2, 3.2, 3.2],
       }),
       need('pyramid', 'Lesser pyramid', {
-        tags: ['pyramid'],
+        tags: ['pyramid', 'egypt'],
         position: [9, 0, -16],
         scale: [2.4, 2.4, 2.4],
       }),
       need('statue', 'Guardian statue', {
-        tags: ['statue'],
+        tags: ['statue', 'egypt'],
         position: [-3, 0, -8],
         scale: [1.4, 1.4, 1.4],
       }),
@@ -270,16 +271,88 @@ function featureLayer(composition, seed) {
   }
 
   if (features === 'temples') {
+    if (isEgyptComposition(composition, { theme })) {
+      return [
+        need('temple', 'Egyptian temple court', {
+          tags: ['temple', 'landmark', 'egypt'],
+          position: [0, 0, -10],
+          scale: [1.5, 1.5, 1.5],
+          detail: 'high',
+        }),
+        ...scatter('column', 'Temple column', 6, seed + 100, { radiusMin: 4, radiusMax: 10, scale: 1 }),
+        ...scatter('statue', 'Temple statue', 3, seed + 105, { radiusMin: 5, radiusMax: 12, scale: 1.1 }),
+        need('obelisk', 'Court obelisk', {
+          tags: ['obelisk', 'egypt'],
+          position: [4, 0, -6],
+          scale: [1.2, 1.2, 1.2],
+        }),
+      ]
+    }
+
+    const motif = composition.motif || 'cultural temple courtyard'
+    const color = /japan|zen|sakura|asia|china|korea/.test(motif)
+      ? 'earthy'
+      : /greek|roman|marble/.test(motif)
+        ? 'neutral'
+        : /maya|aztec|inca|mesoamerican/.test(motif)
+          ? 'warm'
+          : 'earthy'
     return [
-      need('temple', 'Temple court', {
-        tags: ['temple', 'landmark'],
+      need('generic', motif, {
+        tags: ['temple', 'landmark', 'cultural'],
         position: [0, 0, -10],
-        scale: [1.5, 1.5, 1.5],
+        scale: [1.6, 1.6, 1.6],
         detail: 'high',
+        category: 'structure',
+        form: /pagoda|tower|stupa/.test(motif) ? 'tower' : /arch|ruin|greek|roman/.test(motif) ? 'arch' : 'block',
+        appearance: {
+          scale_hint: 'giant',
+          color,
+          surface: 'matte',
+          emission: 0,
+          roughness: 0.75,
+          metalness: 0,
+          transparency: 0,
+        },
+        geometry: { primary_form: /pagoda|tower|stupa/.test(motif) ? 'tower' : 'block', facets: 8, height: 5, width: 4 },
+        behavior: { floating: false, clustered: false, count: 1 },
       }),
-      ...scatter('column', 'Temple column', 6, seed + 100, { radiusMin: 4, radiusMax: 10, scale: 1 }),
-      ...scatter('statue', 'Temple statue', 3, seed + 105, { radiusMin: 5, radiusMax: 12, scale: 1.1 }),
-      need('obelisk', 'Court obelisk', { tags: ['obelisk'], position: [4, 0, -6], scale: [1.2, 1.2, 1.2] }),
+      ...scatterGeneric(`${motif} gate`, 3, seed + 100, {
+        category: 'structure',
+        form: 'arch',
+        appearance: {
+          scale_hint: 'large',
+          color,
+          surface: 'matte',
+          emission: 0,
+          roughness: 0.7,
+          metalness: 0,
+          transparency: 0,
+        },
+        geometry: { primary_form: 'arch', facets: 6, height: 2.8, width: 2.2 },
+        behavior: { floating: false, clustered: false, count: 1 },
+      }, { radiusMin: 4, radiusMax: 11, scale: 1 }),
+      ...scatterGeneric(`${motif} pillar`, 4, seed + 105, {
+        category: 'structure',
+        form: 'spire',
+        appearance: {
+          scale_hint: 'medium',
+          color,
+          surface: 'matte',
+          emission: 0,
+          roughness: 0.65,
+          metalness: 0,
+          transparency: 0,
+        },
+        geometry: { primary_form: 'spire', facets: 6, height: 2.4, width: 0.7 },
+        behavior: { floating: false, clustered: true, count: 1 },
+      }, { radiusMin: 3.5, radiusMax: 12, scale: 0.95 }),
+      ...scatter('rock', 'Courtyard stone', 3, seed + 110, {
+        radiusMin: 5,
+        radiusMax: 14,
+        scale: 0.85,
+        tags: ['rock', 'temple'],
+      }),
     ]
   }
 
@@ -409,8 +482,8 @@ function featureLayer(composition, seed) {
 }
 
 /** Sky / atmosphere overlay merged onto SceneConfiguration. */
-export function compositionSceneOverlay(composition) {
-  const { biome, atmosphere, vegetation } = composition
+export function compositionSceneOverlay(composition, theme = '') {
+  const { biome, atmosphere, vegetation, large_features: features } = composition
   const overlay = {}
 
   if (/ocean|coral|reef/.test(biome)) {
@@ -426,7 +499,11 @@ export function compositionSceneOverlay(composition) {
       effects: ['caustics'],
       structures: vegetation === 'coral_reef' ? ['coral', 'reef'] : ['coral'],
     })
-  } else if (biome === 'desert_plateau' || biome === 'temple_court') {
+  } else if (
+    biome === 'desert_plateau' ||
+    (biome === 'temple_court' && isEgyptComposition(composition, { theme })) ||
+    (features === 'pyramids' && isEgyptComposition(composition, { theme }))
+  ) {
     Object.assign(overlay, {
       environment: 'egypt',
       sky: 'clear',
@@ -438,6 +515,20 @@ export function compositionSceneOverlay(composition) {
       particles: 'sand',
       effects: atmosphere === 'dusty' ? ['dust', 'heat_haze'] : ['heat_haze'],
       structures: biome === 'temple_court' ? ['temple', 'obelisk', 'columns'] : ['pyramid', 'obelisk'],
+    })
+  } else if (features === 'temples') {
+    Object.assign(overlay, {
+      environment: /forest/.test(biome) ? 'forest' : /urban/.test(biome) ? 'city' : 'meadow',
+      sky: atmosphere === 'misty' ? 'overcast' : 'clear',
+      ground: /forest/.test(biome) ? 'dirt' : 'rock',
+      terrain: 'flat',
+      fog: atmosphere === 'misty' ? 0.35 : 0.12,
+      lightingStyle: 'neutral',
+      colorMood: 'neutral',
+      particles: atmosphere === 'misty' ? 'dust' : 'pollen',
+      effects: atmosphere === 'misty' ? ['dust'] : ['godrays'],
+      structures: ['ruins'],
+      treeDensity: /forest/.test(biome) ? 0.35 : 0.15,
     })
   } else if (biome === 'tomb' || biome === 'cave') {
     Object.assign(overlay, {
@@ -580,7 +671,7 @@ export function composeRoom(room, theme = '', options = {}) {
   const lifeBudget = Math.max(4, Math.floor(maxFill * 0.3))
 
   let objects = [
-    ...featureLayer(composition, seed).slice(0, featureBudget),
+    ...featureLayer(composition, seed, theme).slice(0, featureBudget),
     ...vegetationLayer(composition, seed + 1000).slice(0, vegetationBudget),
     ...lifeLayer(composition, seed + 2000).slice(0, lifeBudget),
   ]
@@ -633,7 +724,7 @@ export function composeRoom(room, theme = '', options = {}) {
     composition,
     objects: objects.slice(0, maxFill),
     scene: {
-      ...compositionSceneOverlay(composition),
+      ...compositionSceneOverlay(composition, theme),
       animationSpeed: Math.min(1, 0.35 + (animation.behaviors?.length || 0) * 0.04),
     },
     animation,

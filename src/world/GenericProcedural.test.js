@@ -50,6 +50,28 @@ describe('Generic procedural objects', () => {
     assert.equal(pyramid.specialized, true)
   })
 
+  it('routes non-egypt temples to generic and egypt temples to specialized mesh', () => {
+    const japan = resolveProceduralObject({
+      type: 'temple',
+      description: 'japanese shrine',
+      tags: ['japan', 'shrine'],
+    })
+    assert.equal(japan.type, 'generic')
+    assert.equal(japan.specialized, false)
+    assert.equal(japan.descriptor.category, 'structure')
+
+    const bare = resolveProceduralObject({ type: 'temple', description: 'temple court' })
+    assert.equal(bare.type, 'generic')
+
+    const egypt = resolveProceduralObject({
+      type: 'temple',
+      description: 'Egyptian limestone temple',
+      tags: ['temple', 'egypt'],
+    })
+    assert.equal(egypt.type, 'temple')
+    assert.equal(egypt.specialized, true)
+  })
+
   it('createGenericNeed produces schema-safe objects', () => {
     const need = createGenericNeed({
       name: 'Alien cap',

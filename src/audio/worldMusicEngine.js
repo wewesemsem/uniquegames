@@ -1,8 +1,13 @@
 /**
  * Procedural world score — original Web Audio synthesis only.
- * Each Explore regenerates a unique composition for the chosen mood.
- * No samples or third-party audio assets.
+ * Each Explore regenerates a unique composition from a MusicSpecification
+ * (LLM music prompt → BPM / scale / energy, etc.). No samples or vendor audio.
  */
+
+import {
+  heuristicMusicSpecification,
+  sanitizeMusicSpecification,
+} from './MusicSpecification.js'
 
 export const MUSIC_MOODS = ['fun', 'horror', 'mellow']
 
@@ -17,117 +22,53 @@ const ENABLED_KEY = 'uniquegames-world-music-enabled'
 const SILENT_WAV =
   'data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQIAAAAAAA=='
 
-const N = {
-  C2: 65.41,
-  D2: 73.42,
-  Eb2: 77.78,
-  E2: 82.41,
-  F2: 87.31,
-  Fs2: 92.5,
-  G2: 98.0,
-  Ab2: 103.83,
-  A2: 110.0,
-  Bb2: 116.54,
-  B2: 123.47,
-  C3: 130.81,
-  D3: 146.83,
-  Eb3: 155.56,
-  E3: 164.81,
-  F3: 174.61,
-  Fs3: 185.0,
-  G3: 196.0,
-  Ab3: 207.65,
-  A3: 220.0,
-  Bb3: 233.08,
-  B3: 246.94,
-  C4: 261.63,
-  D4: 293.66,
-  Eb4: 311.13,
-  E4: 329.63,
-  F4: 349.23,
-  Fs4: 369.99,
-  G4: 392.0,
-  Ab4: 415.3,
-  A4: 440.0,
-  Bb4: 466.16,
-  B4: 493.88,
-  C5: 523.25,
-  D5: 587.33,
-  Eb5: 622.25,
-  E5: 659.25,
-  F5: 698.46,
-  G5: 783.99,
+const SCALE_INTERVALS = {
+  major: [0, 2, 4, 5, 7, 9, 11],
+  minor: [0, 2, 3, 5, 7, 8, 10],
+  dorian: [0, 2, 3, 5, 7, 9, 10],
+  phrygian: [0, 1, 3, 5, 7, 8, 10],
+  pentatonic: [0, 2, 4, 7, 9],
+  whole_tone: [0, 2, 4, 6, 8, 10],
+  chromatic_sparse: [0, 1, 6, 7, 11],
 }
 
-const PRESETS = {
-  fun: { bpmMin: 108, bpmMax: 128, level: 0.22 },
-  horror: { bpmMin: 58, bpmMax: 78, level: 0.18 },
-  mellow: { bpmMin: 68, bpmMax: 88, level: 0.2 },
+function midiToFreq(midi) {
+  return 440 * 2 ** ((midi - 69) / 12)
 }
 
-const SCALES = {
-  fun: {
-    bass: [N.G2, N.A2, N.B2, N.C3, N.D3, N.E3],
-    chordRoots: [
-      [N.G3, N.B3, N.D4],
-      [N.C3, N.E3, N.G3],
-      [N.D3, N.Fs3, N.A3],
-      [N.E3, N.G3, N.B3],
-      [N.A3, N.C4, N.E4],
-    ],
-    melody: [N.G3, N.A3, N.B3, N.C4, N.D4, N.E4, N.Fs4, N.G4, N.A4, N.B4, N.C5, N.D5, N.E5, N.G5],
-    accents: [N.D4, N.E4, N.G4, N.A4, N.B4, N.D5, N.E5],
-  },
-  horror: {
-    bass: [N.C2, N.D2, N.Eb2, N.F2, N.Fs2, N.Ab2, N.Bb2],
-    chordRoots: [
-      [N.D2, N.Ab2],
-      [N.Eb2, N.A2],
-      [N.C2, N.Fs2],
-      [N.Bb2, N.E3],
-      [N.F2, N.B2],
-      [N.Ab2, N.D3],
-    ],
-    melody: [N.D3, N.Eb3, N.F3, N.Fs3, N.Ab3, N.A3, N.Bb3, N.B3, N.C4, N.D4, N.Eb4, N.Fs4, N.Ab4],
-    accents: [N.Eb3, N.Fs3, N.Ab3, N.Bb3, N.E4, N.Fs4, N.Ab4],
-  },
-  mellow: {
-    bass: [N.A2, N.C3, N.D3, N.E2, N.F2, N.G2],
-    chordRoots: [
-      [N.A3, N.C4, N.E4],
-      [N.F3, N.A3, N.C4],
-      [N.G3, N.B3, N.D4],
-      [N.E3, N.G3, N.B3],
-      [N.D3, N.F3, N.A3],
-    ],
-    melody: [N.A3, N.B3, N.C4, N.D4, N.E4, N.F4, N.G4, N.A4, N.B4, N.C5, N.D5, N.E5],
-    accents: [N.C4, N.D4, N.E4, N.G4, N.A4, N.C5],
-  },
-}
-
-function readBool(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key)
-    if (raw === null) return fallback
-    return raw === 'true'
-  } catch {
-    return fallback
+function buildPalette(spec) {
+  const intervals = SCALE_INTERVALS[spec.scale] ?? SCALE_INTERVALS.minor
+  const root = spec.rootMidi
+  const degrees = []
+  for (let octave = -1; octave <= 2; octave += 1) {
+    for (const interval of intervals) {
+      const midi = root + octave * 12 + interval
+      if (midi >= 36 && midi <= 88) {
+        degrees.push(midiToFreq(midi))
+      }
+    }
   }
-}
-
-function writeBool(key, value) {
-  try {
-    localStorage.setItem(key, String(!!value))
-  } catch {
-    // ignore
+  const bass = degrees.filter((f) => f < 140).slice(0, 8)
+  const mid = degrees.filter((f) => f >= 140 && f < 400)
+  const high = degrees.filter((f) => f >= 400)
+  const melodyPool = [...mid, ...high].slice(0, 18)
+  const chordRoots = []
+  for (let i = 0; i < Math.min(6, intervals.length); i += 1) {
+    const r = root + intervals[i]
+    const third = intervals[(i + 2) % intervals.length]
+    const fifth = intervals[(i + 4) % intervals.length]
+    const chord = [midiToFreq(r), midiToFreq(root + third), midiToFreq(root + fifth)]
+    if (spec.tension > 0.7 && intervals.length > 4) {
+      chord[1] = midiToFreq(root + intervals[(i + 1) % intervals.length] + (spec.scale === 'phrygian' ? 12 : 0))
+    }
+    chordRoots.push(chord)
   }
-}
-
-function prefersReducedMotion() {
-  return (
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  )
+  return {
+    bass: bass.length ? bass : [midiToFreq(root), midiToFreq(root + 7)],
+    chordRoots: chordRoots.length ? chordRoots : [[midiToFreq(root), midiToFreq(root + 3), midiToFreq(root + 7)]],
+    melody: melodyPool.length ? melodyPool : [midiToFreq(root + 12), midiToFreq(root + 16)],
+    accents: (high.length ? high : melodyPool).slice(0, 10),
+  }
 }
 
 export function normalizeMood(mood) {
@@ -139,6 +80,13 @@ export function normalizeMood(mood) {
   if (/mellow|calm|chill|soft|ambient|relax|peaceful/.test(key)) return 'mellow'
   if (/fun|happy|upbeat|bright|adventure|play/.test(key)) return 'fun'
   return 'fun'
+}
+
+function specFromMoodOrSpec(moodOrSpec) {
+  if (moodOrSpec && typeof moodOrSpec === 'object' && moodOrSpec.bpm != null) {
+    return sanitizeMusicSpecification(moodOrSpec)
+  }
+  return heuristicMusicSpecification(String(moodOrSpec ?? ''))
 }
 
 /** Mulberry32 — deterministic PRNG from a 32-bit seed. */
@@ -182,7 +130,6 @@ function buildMelody(rng, scale, density) {
     const jump = randInt(rng, -2, 2)
     lastIdx = Math.max(0, Math.min(scale.length - 1, lastIdx + jump))
     steps[step] = scale[lastIdx]
-    // Occasional rest after a hit for phrasing
     if (chance(rng, 0.35) && step + 1 < LOOP_STEPS) {
       steps[step + 1] = null
     }
@@ -191,21 +138,22 @@ function buildMelody(rng, scale, density) {
 }
 
 /**
- * Build a fresh loop for the mood. Pure + seeded so tests can assert variety.
+ * Build a fresh loop from a MusicSpecification (or legacy mood string).
+ * Pure + seeded so tests can assert variety.
  */
-export function generateScore(mood, seed = Date.now()) {
-  const normalized = normalizeMood(mood)
-  const preset = PRESETS[normalized]
-  const palette = SCALES[normalized]
+export function generateScore(moodOrSpec, seed = Date.now()) {
+  const spec = specFromMoodOrSpec(moodOrSpec)
+  const palette = buildPalette(spec)
   const rng = createRng(seed >>> 0)
-  const bpm = randInt(rng, preset.bpmMin, preset.bpmMax)
+  const bpmJitter = randInt(rng, -3, 3)
+  const bpm = Math.min(180, Math.max(48, Math.round(spec.bpm + bpmJitter)))
 
   const chords = []
   const bass = []
   const bassOff = []
   for (let bar = 0; bar < BARS_PER_LOOP; bar += 1) {
     const chord = pick(rng, palette.chordRoots).slice()
-    if (normalized === 'horror' && chord.length === 2) {
+    if (spec.tension > 0.7 && chord.length >= 2 && chance(rng, 0.55)) {
       chord.push(chord[1] * (chance(rng, 0.5) ? 1.498 : 1.414))
     }
     chords.push(chord)
@@ -213,37 +161,33 @@ export function generateScore(mood, seed = Date.now()) {
     bassOff.push(pick(rng, palette.bass))
   }
 
-  const density = normalized === 'fun' ? 0.28 : normalized === 'horror' ? 0.12 : 0.14
-  const melody = buildMelody(rng, palette.melody, density)
+  const melody = buildMelody(rng, palette.melody, Math.min(0.55, 0.08 + spec.density * 0.55))
   const accents = Array.from({ length: BARS_PER_LOOP }, () => pick(rng, palette.accents))
   const bells = Array.from({ length: BARS_PER_LOOP }, () => pick(rng, palette.accents))
 
-  const kickBeats =
-    normalized === 'fun'
-      ? [0, 8]
-      : normalized === 'horror'
-        ? chance(rng, 0.5)
-          ? [0, 10]
-          : [0, 9]
-        : chance(rng, 0.4)
-          ? [0]
-          : []
+  let kickBeats = []
+  let rimBeats = []
+  let shakerEvery = 0
+  if (spec.percussion === 'busy') {
+    kickBeats = [0, 8]
+    rimBeats = [4, 12]
+    shakerEvery = 2
+  } else if (spec.percussion === 'steady') {
+    kickBeats = spec.energy > 0.55 ? [0, 8] : [0]
+    rimBeats = chance(rng, 0.5) ? [8] : [4]
+    shakerEvery = 4
+  } else if (spec.percussion === 'sparse') {
+    kickBeats = chance(rng, 0.6) ? [0] : [0, 10]
+    rimBeats = chance(rng, 0.35) ? [8] : []
+    shakerEvery = chance(rng, 0.4) ? 8 : 0
+  }
 
-  const rimBeats = normalized === 'fun' ? [4, 12] : normalized === 'horror' && chance(rng, 0.4) ? [8] : []
-  const shakerEvery = normalized === 'fun' ? 2 : normalized === 'mellow' ? 8 : chance(rng, 0.5) ? 4 : 0
   const pizzBeats =
-    normalized === 'fun'
-      ? [6, 14]
-      : normalized === 'horror'
-        ? [4, 12]
-        : chance(rng, 0.5)
-          ? [8]
-          : []
-  const bellBeats =
-    normalized === 'fun' ? [3, 11] : normalized === 'horror' ? [7, 15] : [8]
+    spec.density > 0.45 ? [6, 14] : spec.tension > 0.6 ? [4, 12] : chance(rng, 0.5) ? [8] : []
+  const bellBeats = spec.brightness > 0.6 ? [3, 11] : spec.tension > 0.65 ? [7, 15] : [8]
 
   const flourish =
-    normalized === 'fun'
+    spec.energy > 0.65
       ? {
           bars: [6, 7],
           beats: [2, 5, 9, 13],
@@ -251,11 +195,13 @@ export function generateScore(mood, seed = Date.now()) {
         }
       : null
 
+  const level = 0.14 + spec.energy * 0.12
+
   return {
     id: seed >>> 0,
-    mood: normalized,
+    mood: spec.label,
     bpm,
-    level: preset.level,
+    level,
     chords,
     bass,
     bassOff,
@@ -268,7 +214,44 @@ export function generateScore(mood, seed = Date.now()) {
     pizzBeats,
     bellBeats,
     flourish,
+    params: {
+      energy: spec.energy,
+      tension: spec.tension,
+      brightness: spec.brightness,
+      density: spec.density,
+      drone: spec.drone,
+      pad: spec.pad,
+      percussion: spec.percussion,
+      scale: spec.scale,
+      label: spec.label,
+    },
+    specification: spec,
   }
+}
+
+function readBool(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw === null) return fallback
+    return raw === 'true'
+  } catch {
+    return fallback
+  }
+}
+
+function writeBool(key, value) {
+  try {
+    localStorage.setItem(key, String(!!value))
+  } catch {
+    // ignore
+  }
+}
+
+function prefersReducedMotion() {
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
 }
 
 function WorldMusicEngine() {
@@ -293,8 +276,8 @@ function WorldMusicEngine() {
 
 WorldMusicEngine.prototype.getPreset = function () {
   return {
-    bpm: this.score?.bpm || PRESETS[this.mood].bpmMin,
-    level: this.score?.level || PRESETS[this.mood].level,
+    bpm: this.score?.bpm || 100,
+    level: this.score?.level || 0.2,
   }
 }
 
@@ -572,7 +555,7 @@ WorldMusicEngine.prototype.playPad = function (freqs, when, dur, gain) {
     osc.frequency.setValueAtTime(freq, when)
     osc.detune.setValueAtTime(idx === 1 ? -6 : idx === 2 ? 5 : 0, when)
     filter.type = 'lowpass'
-    filter.frequency.setValueAtTime(this.mood === 'horror' ? 700 : 1200, when)
+    filter.frequency.setValueAtTime(900 + (this.score?.params?.brightness ?? 0.5) * 900, when)
     amp.gain.setValueAtTime(0.0001, when)
     amp.gain.linearRampToValueAtTime(g, when + 0.35)
     amp.gain.setValueAtTime(g, when + dur - 0.4)
@@ -654,7 +637,7 @@ WorldMusicEngine.prototype.playShaker = function (when, gain = 0.028) {
   const amp = ctx.createGain()
   src.buffer = this.getNoise()
   filter.type = 'bandpass'
-  filter.frequency.setValueAtTime(this.mood === 'horror' ? 1800 : 6000, when)
+  filter.frequency.setValueAtTime((this.score?.params?.brightness ?? 0.5) > 0.45 ? 6000 : 1800, when)
   filter.Q.setValueAtTime(0.8, when)
   amp.gain.setValueAtTime(0.0001, when)
   amp.gain.exponentialRampToValueAtTime(gain, when + 0.005)
@@ -674,56 +657,60 @@ WorldMusicEngine.prototype.scheduleStep = function (step, when) {
   const beat = step % STEPS_PER_BAR
   const loopCycle = Math.floor(step / LOOP_STEPS)
   const stepDur = this.stepDuration()
-  const mood = score.mood
+  const params = score.params ?? {}
+  const energy = params.energy ?? 0.5
+  const tension = params.tension ?? 0.4
+  const brightness = params.brightness ?? 0.5
+  const padMode = params.pad ?? 'soft'
+  const useDrone = Boolean(params.drone)
 
   if (beat === 0) {
     const chord = score.chords[bar]
-    if (mood === 'horror') {
-      this.playDrone(chord[0], when, stepDur * STEPS_PER_BAR, 0.045)
-      this.playPad(chord, when, stepDur * STEPS_PER_BAR, 0.028)
-    } else {
-      const padGain = mood === 'mellow' ? 0.036 : 0.032
+    if (useDrone || tension > 0.7) {
+      this.playDrone(chord[0], when, stepDur * STEPS_PER_BAR, 0.03 + tension * 0.03)
+    }
+    if (padMode !== 'none') {
+      const padGain = padMode === 'thick' ? 0.04 : 0.03 + (1 - tension) * 0.01
       this.playPad(chord, when, stepDur * STEPS_PER_BAR, padGain)
     }
   }
 
-  if (mood === 'fun') {
-    if (beat === 0 || beat === 8) this.playBass(score.bass[bar], when, 0.11)
-    if (beat === 4 || beat === 12) this.playBass(score.bassOff[bar], when, 0.07)
-  } else if (mood === 'mellow') {
+  if (energy > 0.6) {
+    if (beat === 0 || beat === 8) this.playBass(score.bass[bar], when, 0.09 + energy * 0.04)
+    if (beat === 4 || beat === 12) this.playBass(score.bassOff[bar], when, 0.06 + energy * 0.02)
+  } else if (energy > 0.35) {
     if (beat === 0) this.playBass(score.bass[bar], when, 0.08)
   } else if (beat === 0 && bar % 4 === 0) {
-    this.playBass(score.bass[bar], when, 0.12)
+    this.playBass(score.bass[bar], when, 0.1)
   }
 
   if (score.kickBeats.includes(beat)) {
-    this.playKick(when, mood === 'horror' ? 0.09 : 0.07)
+    this.playKick(when, 0.06 + tension * 0.04)
   }
   if (score.rimBeats.includes(beat)) this.playRim(when)
   if (score.shakerEvery > 0 && beat % score.shakerEvery === 0) {
-    const shakerGain = mood === 'fun' ? 0.028 : mood === 'horror' ? 0.018 : 0.012
-    this.playShaker(when, shakerGain)
+    this.playShaker(when, 0.012 + brightness * 0.02)
   }
 
   const mel = score.melody[step % LOOP_STEPS]
   if (mel) {
-    const gain = mood === 'fun' ? 0.07 : mood === 'horror' ? 0.04 : 0.045
-    if (mood === 'horror') this.playPizz(mel, when, gain)
+    const gain = 0.035 + energy * 0.04
+    if (tension > 0.65 || brightness < 0.35) this.playPizz(mel, when, gain)
     else this.playPluck(mel, when, gain)
   }
 
   if (score.pizzBeats.includes(beat)) {
-    this.playPizz(score.accents[bar], when, mood === 'horror' ? 0.035 : 0.04)
+    this.playPizz(score.accents[bar], when, 0.03 + tension * 0.02)
   }
   if (score.bellBeats.includes(beat)) {
-    this.playBell(score.bells[bar], when, mood === 'mellow' ? 0.03 : 0.028)
+    this.playBell(score.bells[bar], when, 0.022 + brightness * 0.02)
   }
 
   if (score.flourish && loopCycle % 2 === 1) {
     const { bars, beats, notes } = score.flourish
     if (bars.includes(bar) && beats.includes(beat)) {
       const idx = (bar === bars[1] ? 4 : 0) + Math.floor(beat / 4)
-      this.playBell(notes[idx % notes.length], when, 0.045)
+      this.playBell(notes[idx % notes.length], when, 0.04)
     }
   }
 }
@@ -746,10 +733,13 @@ WorldMusicEngine.prototype.restartTransportClock = function () {
   }
 }
 
-WorldMusicEngine.prototype.regenerateScore = function (moodText) {
-  const mood = normalizeMood(moodText ?? this.mood)
-  this.mood = mood
-  this.score = generateScore(mood, hashSeed(moodText || mood))
+WorldMusicEngine.prototype.regenerateScore = function (moodOrSpec) {
+  const seedText =
+    moodOrSpec && typeof moodOrSpec === 'object'
+      ? `${moodOrSpec.label || 'score'}:${moodOrSpec.bpm}:${moodOrSpec.scale}`
+      : moodOrSpec
+  this.score = generateScore(moodOrSpec, hashSeed(seedText || 'fun'))
+  this.mood = this.score.params?.label || this.score.mood || 'score'
   this.restartTransportClock()
   this.emit()
   return this.score
@@ -783,6 +773,11 @@ WorldMusicEngine.prototype.stopTransport = function (fade) {
 WorldMusicEngine.prototype.setMood = function (mood) {
   this.mood = normalizeMood(mood)
   this.emit()
+}
+
+WorldMusicEngine.prototype.playFromSpec = function (specification) {
+  this.regenerateScore(specification)
+  this.play()
 }
 
 WorldMusicEngine.prototype.playForMood = function (mood) {

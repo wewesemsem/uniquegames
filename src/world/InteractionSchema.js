@@ -8,6 +8,7 @@
  */
 
 import { z } from 'zod'
+import { isEgyptComposition } from './egyptContext.js'
 
 export const TRIGGER_TYPES = [
   'click',
@@ -289,7 +290,7 @@ export function inferInteractions(composition = {}, options = {}) {
     })
   }
 
-  if (biome === 'temple_court' || features === 'temples') {
+  if (isEgyptComposition(composition) && (biome === 'temple_court' || features === 'temples')) {
     add({
       id: 'sarcophagus_open',
       target: 'statue',

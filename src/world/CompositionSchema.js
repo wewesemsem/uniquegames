@@ -5,6 +5,12 @@
  */
 
 import { z } from 'zod'
+import {
+  demoteNonEgyptTempleComposition,
+  hasNonEgyptTempleCulture,
+  inferTempleMotif,
+  isEgyptContext,
+} from './egyptContext.js'
 
 export const BIOMES = [
   'ocean_floor',
@@ -69,6 +75,12 @@ const pick = (value, allowed, fallback) => {
     .toLowerCase()
     .replace(/[\s-]+/g, '_')
   if (allowed.includes(text)) return text
+  // Bare "temple" must not fuzzy-promote to Egypt-only biome temple_court.
+  if (text === 'temple' || text === 'temples') {
+    if (allowed.includes('generic')) return 'generic'
+    if (allowed.includes('temples')) return 'temples'
+    return fallback
+  }
   const fuzzy = allowed.find((item) => text.includes(item) || item.includes(text))
   return fuzzy ?? fallback
 }
@@ -211,6 +223,24 @@ export function inferComposition({ theme = '', description = '', tags = [], room
     })
   }
 
+  // Non-Egyptian temples / shrines → generic cultural motif (not limestone Egypt meshes).
+  if (
+    (/temple|shrine|pagoda|torii|sanctuary|stupa|ziggurat|acropolis/.test(text) ||
+      hasNonEgyptTempleCulture(text)) &&
+    !isEgyptContext(text) &&
+    !/tomb|pyramid|pharaoh|desert/.test(text)
+  ) {
+    return sanitizeComposition({
+      biome: /forest|garden|zen/.test(text) ? 'forest' : /city|urban/.test(text) ? 'urban' : 'generic',
+      life: 'sparse',
+      vegetation: /forest|garden|zen|sakura/.test(text) ? 'forest' : 'sparse',
+      large_features: 'temples',
+      atmosphere: 'misty',
+      density: 0.6,
+      motif: inferTempleMotif(text),
+    })
+  }
+
   if (/egypt|pyramid|pharaoh|nile|sphinx|tomb|desert/.test(text)) {
     if (/tomb|passage|corridor/.test(text) || roomId === 'room3') {
       return sanitizeComposition({
@@ -230,6 +260,7 @@ export function inferComposition({ theme = '', description = '', tags = [], room
         large_features: 'temples',
         atmosphere: 'dusty',
         density: 0.65,
+        motif: 'ancient egyptian temple court',
       })
     }
     return sanitizeComposition({
@@ -301,14 +332,20 @@ export function inferComposition({ theme = '', description = '', tags = [], room
 }
 
 export function resolveRoomComposition(room = {}, theme = '') {
-  if (room.composition) {
-    return sanitizeComposition(room.composition)
-  }
-  return inferComposition({
+  const extra = {
     theme,
     description: room.environment?.description ?? room.name ?? '',
     tags: room.environment?.tags ?? [],
-    roomId: room.id,
-    roomName: room.name,
-  })
+    name: room.name,
+  }
+  const composition = room.composition
+    ? sanitizeComposition(room.composition)
+    : inferComposition({
+        theme,
+        description: extra.description,
+        tags: extra.tags,
+        roomId: room.id,
+        roomName: room.name,
+      })
+  return demoteNonEgyptTempleComposition(composition, extra)
 }

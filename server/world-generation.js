@@ -153,9 +153,12 @@ Rules:
   Examples: Egypt pyramid click → mummy chase_player; coral click → whale swim_into_scene; flower click → butterflies fly_in; torch proximity → change_lighting; spaceship click → asteroid spawn.
 - Interactions are structured data only: trigger + target + reaction. The app owns event handling and procedural spawning.
 - Prefer specialized types when they exist (pyramid, fish, flower, tree, spaceship, …).
+- Specialized type "temple" and biome "temple_court" are Ancient Egypt ONLY (limestone colonnade, obelisks, pharaoh courts). Use them only when the prompt is Egyptian / pyramid / pharaoh / Nile.
+- Non-Egyptian temples and shrines (Japan, Shinto, pagoda, Greek, Maya, Hindu, etc.): biome generic|forest|meadow|urban, large_features "temples", motif naming the culture (e.g. "japanese shrine courtyard"), and objects with type "generic", category "structure" — never type "temple".
 - For UNKNOWN concepts (mushroom, crystal city, alien flora, floating temples): use type "generic" OR a free-form type plus category/form/appearance/geometry/behavior. The engine builds primitives from those safe params.
 - Example alien mushroom forest: biome alien, vegetation fungal, atmosphere bioluminescent, motif "giant glowing mushrooms", plus a few landmark generic mushrooms with emission.
 - Example floating crystal city: biome alien, large_features crystals, motif "floating crystal city", objects with category floating_structure, form crystalline, behavior.floating true.
+- Example Japan shrine: biome forest or generic, large_features temples, motif "japanese shrine courtyard", generic structure landmarks — not Egyptian temple_court.
 - objects[] is mainly 0–6 landmarks. Do NOT list every prop — composition + composer fill the world.
 - Scale 0.2–16. No URLs, paths, code, or extra keys.
 - At most ${limits.maxHotspotsPerRoom} hotspots per room; connect rooms with existing targetRoom ids.
