@@ -179,6 +179,28 @@ InputManager
   World + Panorama + Objects + Hotspots
 ```
 
+## Procedural music
+
+Soundtrack is **isolated from world generation**. The music field is its own prompt — the world LLM never reads it, and the music API never receives the world prompt.
+
+```text
+Music field only (e.g. "thriller")
+  → POST /api/music/compose
+  → Music director (LLM or heuristic) → Music Specification JSON
+       bpm, energy, tension, brightness, density,
+       scale, percussion, drone, pad, rootMidi
+  → Frontend Web Audio synthesizer (worldMusicEngine)
+       builds a unique loop from those params
+```
+
+The LLM does **not** stream audio. It returns musical parameters; the browser synthesizes oscillators/noise live (no samples). Without `LLM_API_KEY`, a heuristic still maps the music text into a specification. Empty music field → a default local score (no music API call needed for synthesis fallback).
+
+| Step | Module | Side | Role |
+| --- | --- | --- | --- |
+| Music prompt UI | `WorldPrompt` music field | Frontend | Collect vibe only |
+| Music direction | `server/music-generation.js` | Backend | LLM/heuristic → `MusicSpecification` |
+| Synthesize | `src/audio/worldMusicEngine.js` | Frontend | Web Audio loop from BPM/scale/etc. |
+
 ## Adding a panorama
 
 1. Put an **equirectangular** image in `public/panoramas/` (2:1 JPEG or PNG).
@@ -268,6 +290,11 @@ src/
   App.jsx
   main.jsx
   api/worldApi.js
+  api/musicApi.js
+  audio/
+    MusicSpecification.js
+    worldMusicEngine.js
+    useWorldMusic.js
   world/
     WorldSpecification.js
     WorldDirector.js
@@ -306,6 +333,7 @@ src/
   ui/EnvironmentUI.jsx
 server/
   world-generation.js
+  music-generation.js
   vite-plugin-world-api.js
   config.js
   rate-limit/
