@@ -99,17 +99,17 @@ environmentStore.replaceWorld()
 Environment.jsx renders rooms
 ```
 
-| Step | Module | Side | Role |
-| --- | --- | --- | --- |
-| Input UI | `WorldPrompt` / voice | Frontend | Collect prompt |
-| Rate limit / validate | `server/world-generation.js` | Backend | Gate + Zod |
-| World direction | Server director (+ optional LLM) | Backend | Theme, rooms, composition intent, landmarks |
-| Scene direction | `server/procedural/sceneDirector.js` | Backend | Sky/atmosphere `SceneConfiguration` |
-| Scene composing | `src/world/SceneComposer.js` via `WorldBuilder` | Frontend | Expand composition intent into object lists/positions |
-| Mesh resolve | `ObjectResolver.js` | Frontend | Map types → procedural generators |
-| Sky paint | `ProceduralPanorama` | Frontend | p5 equirect canvas → texture |
-| Render | `Environment.jsx` + R3F | Frontend | Walkable scene + WebXR |
-| Image panoramas | AssetResolver | Backend | Only if `ENVIRONMENT_MODE=IMAGE_GENERATION` |
+| Step | Module | Side | Language / runtime | Role |
+| --- | --- | --- | --- | --- |
+| Input UI | `WorldPrompt` / voice | Frontend | Browser JS (React) | Collect prompt |
+| Rate limit / validate | `server/world-generation.js` | Backend | Node.js | Gate + Zod |
+| World direction | Server director (+ optional LLM) | Backend | Node.js → JSON from LLM | Theme, rooms, composition intent, landmarks |
+| Scene direction | `server/procedural/sceneDirector.js` | Backend | Node.js (+ optional LLM) | Sky/atmosphere `SceneConfiguration` |
+| Scene composing | `src/world/SceneComposer.js` via `WorldBuilder` | Frontend | Browser JS | Expand composition intent into object lists/positions |
+| Mesh resolve | `ObjectResolver.js` | Frontend | Browser JS | Map types → procedural generators |
+| Sky paint | `ProceduralPanorama` | Frontend | p5.js in browser | Equirect canvas → texture |
+| Render | `Environment.jsx` + R3F | Frontend | Three.js in browser | Walkable scene + WebXR |
+| Image panoramas | AssetResolver | Backend | Node.js + image API | Only if `ENVIRONMENT_MODE=IMAGE_GENERATION` |
 
 The LLM describes **what is in the world** (pyramid, temple, spaceship, …) with optional positions/scales.  
 **SceneDirector** (backend) produces sky/atmosphere JSON. **SceneComposer** (frontend) deterministically fills rooms. **p5.js** paints the sky; **Three.js** builds meshes via `ObjectResolver` → generators.
